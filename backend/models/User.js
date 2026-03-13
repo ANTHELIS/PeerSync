@@ -33,6 +33,36 @@ const userSchema = new mongoose.Schema(
       default: 1,
     },
 
+    // --- User Classification ---
+    userType: {
+      type: String,
+      enum: ['college_student', 'school_student', 'professor'],
+      default: 'college_student',
+    },
+    institution: {
+      // College name, school name, or university for professor
+      type: String,
+      trim: true,
+      default: '',
+    },
+    grade: {
+      // Only for school_students: e.g. 'Class 10', 'Class 12'
+      type: String,
+      trim: true,
+      default: '',
+    },
+    marksType: {
+      // 'sgpa' or 'percentage' — only for college/school students, optional
+      type: String,
+      enum: ['sgpa', 'percentage', ''],
+      default: '',
+    },
+    marksValue: {
+      // The actual numeric value (SGPA: 0-10, Percentage: 0-100)
+      type: Number,
+      default: null,
+    },
+
     // --- Learning Profile (filled during onboarding) ---
     learningStyle: {
       type: String,
@@ -95,6 +125,24 @@ const userSchema = new mongoose.Schema(
         type: Number,
         default: 0,
       },
+    },
+
+    // --- AI Skill Assessment (quiz results) ---
+    quizCompleted: {
+      type: Boolean,
+      default: false,
+    },
+    skillScores: {
+      // e.g. { 'Data Structures': { score: 80, level: 'Advanced', correct: 4, total: 5, testedAt: Date } }
+      type: Map,
+      of: new mongoose.Schema({
+        score:    { type: Number, default: 0 },   // 0-100
+        level:    { type: String, enum: ['Beginner', 'Intermediate', 'Advanced', 'Expert'], default: 'Beginner' },
+        correct:  { type: Number, default: 0 },
+        total:    { type: Number, default: 0 },
+        testedAt: { type: Date, default: Date.now },
+      }, { _id: false }),
+      default: {},
     },
 
     // --- Profile Completion ---

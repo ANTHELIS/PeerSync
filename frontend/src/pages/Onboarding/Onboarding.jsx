@@ -37,7 +37,7 @@ const Onboarding = () => {
         learningStyle, subjectsNeeded, subjectsStrong, availability, gpa: parseFloat(gpa) || 0,
       });
       updateUser({ ...res.data.profile, onboardingComplete: true });
-      navigate('/dashboard');
+      navigate('/quiz'); // → skill assessment quiz
     } catch (err) {
       alert(err.response?.data?.message || 'Error saving profile');
     } finally {

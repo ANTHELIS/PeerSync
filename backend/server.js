@@ -12,12 +12,13 @@ const errorHandler = require('./middleware/errorHandler');
 const setupChatSocket = require('./socket/chatHandler');
 
 // Import routes
-const authRoutes = require('./routes/authRoutes');
+const authRoutes    = require('./routes/authRoutes');
 const studentRoutes = require('./routes/studentRoutes');
-const mentorRoutes = require('./routes/mentorRoutes');
-const matchRoutes = require('./routes/matchRoutes');
+const mentorRoutes  = require('./routes/mentorRoutes');
+const matchRoutes   = require('./routes/matchRoutes');
 const sessionRoutes = require('./routes/sessionRoutes');
-const feedbackRoutes = require('./routes/feedbackRoutes');
+const feedbackRoutes= require('./routes/feedbackRoutes');
+const quizRoutes    = require('./routes/quizRoutes');
 
 // Initialize Express
 const app = express();
@@ -36,12 +37,25 @@ app.use(cors());
 app.use(express.json());
 
 // --- Routes ---
-app.use('/api/auth', authRoutes);
+app.use('/api/auth',     authRoutes);
 app.use('/api/students', studentRoutes);
-app.use('/api/mentors', mentorRoutes);
-app.use('/api/matches', matchRoutes);
+app.use('/api/mentors',  mentorRoutes);
+app.use('/api/matches',  matchRoutes);
 app.use('/api/sessions', sessionRoutes);
 app.use('/api/feedback', feedbackRoutes);
+app.use('/api/quiz',     quizRoutes);
+
+// ML Service status proxy
+const axios = require('axios');
+app.get('/api/ml-status', async (req, res) => {
+  const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'http://localhost:8000';
+  try {
+    const response = await axios.get(`${ML_SERVICE_URL}/api/ml/health`, { timeout: 3000 });
+    res.json({ ml_online: true, ...response.data });
+  } catch {
+    res.json({ ml_online: false, status: 'ML service is offline — using fallback matching' });
+  }
+});
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -73,6 +87,7 @@ app.get('/', (req, res) => {
 app.use(errorHandler);
 
 // --- Setup Socket.IO ---
+app.locals.io = io;   // make io accessible to controllers via req.app.locals.io
 setupChatSocket(io);
 
 // --- Connect to DB & Start Server ---

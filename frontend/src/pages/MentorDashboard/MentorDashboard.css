@@ -25,3 +25,62 @@
 .md-empty p { font-size: 1rem; color: var(--text-secondary); margin-bottom: 4px; }
 
 @media (max-width: 768px) { .md-stats-grid { grid-template-columns: repeat(2, 1fr); } }
+
+/* ── Active Sessions Panel ───────────────────────────────────────────────── */
+.md-active-sessions {
+  background: rgba(239,68,68,0.06);
+  border: 1px solid rgba(239,68,68,0.25);
+  border-radius: var(--radius-xl);
+  padding: 22px 24px;
+  margin-bottom: 24px;
+}
+.md-active-title {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 0.95rem; font-weight: 700;
+  color: #f87171; margin-bottom: 16px;
+}
+.active-pulse {
+  width: 10px; height: 10px;
+  background: #f87171;
+  border-radius: 50%;
+  animation: pulseDot 1.4s infinite ease-in-out;
+}
+@keyframes pulseDot {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50%       { transform: scale(1.5); opacity: 0.5; }
+}
+.md-active-list { display: flex; flex-direction: column; gap: 12px; }
+
+.md-active-card {
+  display: flex; align-items: center; gap: 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 14px 18px;
+  transition: border-color 0.2s;
+}
+.md-active-card:hover { border-color: rgba(239,68,68,0.4); }
+
+.mac-avatar {
+  width: 40px; height: 40px;
+  background: var(--gradient-primary);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1rem; font-weight: 700; color: white; flex-shrink: 0;
+}
+.mac-info { flex: 1; display: flex; flex-direction: column; gap: 3px; }
+.mac-student { font-size: 0.95rem; font-weight: 600; color: var(--text-primary); }
+.mac-meta    { font-size: 0.78rem; color: var(--text-muted); }
+
+.mac-join-btn {
+  padding: 9px 20px;
+  background: var(--gradient-primary);
+  color: white; border: none;
+  border-radius: var(--radius-md);
+  font-size: 0.85rem; font-weight: 700;
+  cursor: pointer; white-space: nowrap;
+  transition: var(--transition);
+  box-shadow: 0 4px 16px rgba(102,126,234,0.3);
+}
+.mac-join-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(102,126,234,0.45); }
+

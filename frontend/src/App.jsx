@@ -14,6 +14,7 @@ import Chat from './pages/Chat/Chat';
 import Feedback from './pages/Feedback/Feedback';
 import MentorProfile from './pages/MentorProfile/MentorProfile';
 import MentorDashboard from './pages/MentorDashboard/MentorDashboard';
+import Quiz from './pages/Quiz/Quiz';
 
 function App() {
   return (
@@ -35,6 +36,7 @@ function App() {
           <Route path="/feedback/:sessionId" element={<ProtectedRoute><Feedback /></ProtectedRoute>} />
           <Route path="/mentor/:id" element={<ProtectedRoute><MentorProfile /></ProtectedRoute>} />
           <Route path="/mentor-dashboard" element={<ProtectedRoute><MentorDashboard /></ProtectedRoute>} />
+          <Route path="/quiz" element={<ProtectedRoute><Quiz /></ProtectedRoute>} />
         </Routes>
       </Router>
     </AuthProvider>

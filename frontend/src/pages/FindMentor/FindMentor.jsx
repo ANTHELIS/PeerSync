@@ -1,22 +1,44 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
 import './FindMentor.css';
 
 const FindMentor = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
+
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const [loadingStep, setLoadingStep] = useState('');
+  const [mlStatus, setMlStatus] = useState(null);
+  const [source, setSource] = useState('');
 
+  // Connect modal state
+  const [connectModal, setConnectModal] = useState(null);  // { mentor }
+  const [selectedSubject, setSelectedSubject] = useState('');
+  const [connecting, setConnecting] = useState(false);
+
+  // ── ML health check on mount ──────────────────────────────────────────────
+  useEffect(() => {
+    api.get('/ml-status')
+      .then(res => setMlStatus(res.data.ml_online))
+      .catch(() => setMlStatus(false));
+  }, []);
+
+  // ── Find Mentors ──────────────────────────────────────────────────────────
   const handleSearch = async () => {
     setLoading(true);
     setSearched(false);
     setResults([]);
 
-    // Simulated loading steps for visual effect
-    const steps = ['Analyzing your profile...', 'Scanning 200 mentors...', 'Computing compatibility scores...', 'Ranking top matches...'];
+    const steps = [
+      'Analyzing your profile...',
+      'Scanning 200 mentors...',
+      'Computing compatibility scores...',
+      'Ranking top matches...',
+    ];
     for (let i = 0; i < steps.length; i++) {
       setLoadingStep(steps[i]);
       await new Promise(r => setTimeout(r, 600));
@@ -25,8 +47,9 @@ const FindMentor = () => {
     try {
       const res = await api.post('/matches/find', { topN: 3 });
       setResults(res.data.recommendations || []);
-    } catch (err) {
-      // If ML service is down, show demo data
+      setSource(res.data.source || 'ai');
+    } catch {
+      setSource('demo');
       setResults([
         { mentor_id: 'demo1', name: 'Riya Sharma', match_percentage: 94, reasons: ['Visual teaching style matches yours', 'Expert in Data Structures', 'Excellent schedule compatibility'], mentor_details: { teaching_style: 'Visual', subject_expertise: ['Data Structures', 'Algorithms'], semester: 6, patience_score: 4.8 } },
         { mentor_id: 'demo2', name: 'Arjun Patel', match_percentage: 87, reasons: ['Good schedule overlap', 'Covers most of your needed subjects', 'Known for clear explanations'], mentor_details: { teaching_style: 'Read-Write', subject_expertise: ['Database Systems', 'SQL'], semester: 5, patience_score: 4.5 } },
@@ -38,17 +61,64 @@ const FindMentor = () => {
     }
   };
 
+  // ── Open Connect Modal ────────────────────────────────────────────────────
+  const openConnectModal = (mentor) => {
+    if (mentor.mentor_id?.startsWith('demo')) return; // ignore demo cards
+    const subjects = mentor.mentor_details?.subject_expertise || [];
+    setSelectedSubject(subjects[0] || '');
+    setConnectModal({ mentor });
+  };
+
+  const closeConnectModal = () => {
+    setConnectModal(null);
+    setSelectedSubject('');
+  };
+
+  // ── Start Session & Navigate to Chat ─────────────────────────────────────
+  const handleConnect = async () => {
+    if (!connectModal || !selectedSubject) return;
+    setConnecting(true);
+
+    try {
+      const { mentor } = connectModal;
+      const res = await api.post('/sessions/start', {
+        mentorId: mentor.mentor_id,
+        subject: selectedSubject,
+        matchScore: mentor.match_percentage || 0,
+      });
+
+      const sessionId = res.data._id;
+      closeConnectModal();
+      navigate(`/chat/${sessionId}`);
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to start session. Please try again.');
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="page">
       <div className="container">
+
+        {/* ── Header ─────────────────────────────────────────────────────── */}
         <div className="find-header fade-in">
           <h1>🔍 Find Your Mentor</h1>
-          <p>Our AI will analyze your profile across 6 dimensions and recommend the top 3 most compatible mentors.</p>
+          <p>Our AI analyzes your profile across 6 dimensions and recommends the top 3 most compatible mentors.</p>
+
+          <div className="ml-status-badge">
+            {mlStatus === null && <span className="ml-badge checking">⏳ Checking AI engine...</span>}
+            {mlStatus === true && <span className="ml-badge online">🟢 AI Engine Online — Live ML Recommendations Active</span>}
+            {mlStatus === false && <span className="ml-badge offline">🟡 AI Engine Offline — Smart fallback will be used</span>}
+          </div>
+
           <button className="btn-find" onClick={handleSearch} disabled={loading}>
-            {loading ? '🧠 AI is working...' : '🤖 Find My Best Mentors'}
+            {loading ? 'Seaching ...' : ' Find My Best Mentors'}
           </button>
         </div>
 
+        {/* ── Loading ─────────────────────────────────────────────────────── */}
         {loading && (
           <div className="loading-container fade-in">
             <div className="ai-loader">
@@ -58,15 +128,33 @@ const FindMentor = () => {
           </div>
         )}
 
+        {/* ── Results ─────────────────────────────────────────────────────── */}
         {searched && !loading && (
           <div className="results-container">
+            {source && (
+              <div className={`source-badge ${source}`}>
+                {source === 'ai' ? '🤖 Results powered by ML recommendation engine' :
+                  source === 'fallback' ? '📋 Results from smart fallback (ML offline)' :
+                    '🎭 Demo results — server unavailable'}
+              </div>
+            )}
+
             {results.length === 0 ? (
-              <div className="no-results">No mentors found. Try updating your profile.</div>
+              <div className="no-results">
+                No mentors found. Try updating your profile with more subjects and availability slots.
+              </div>
             ) : (
               results.map((mentor, idx) => (
-                <div key={mentor.mentor_id} className="mentor-card slide-up" style={{ animationDelay: `${idx * 0.15}s` }}>
+                <div
+                  key={mentor.mentor_id}
+                  className="mentor-card slide-up"
+                  style={{ animationDelay: `${idx * 0.15}s` }}
+                >
                   <div className="mc-header">
-                    <div className="mc-rank">{idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'} {idx === 0 ? 'BEST MATCH' : idx === 1 ? 'GREAT MATCH' : 'GOOD MATCH'}</div>
+                    <div className="mc-rank">
+                      {idx === 0 ? '🥇' : idx === 1 ? '🥈' : '🥉'}{' '}
+                      {idx === 0 ? 'BEST MATCH' : idx === 1 ? 'GREAT MATCH' : 'GOOD MATCH'}
+                    </div>
                     <div className="mc-score">{mentor.match_percentage}%</div>
                   </div>
 
@@ -83,6 +171,33 @@ const FindMentor = () => {
                     </div>
                   </div>
 
+                  {/* ML Score Breakdown */}
+                  {mentor.hybrid_score !== undefined && (
+                    <div className="mc-scores">
+                      <div className="score-item">
+                        <span className="score-label">Content Match</span>
+                        <div className="score-bar">
+                          <div className="score-fill" style={{ width: `${Math.round(mentor.content_score * 100)}%` }}></div>
+                        </div>
+                        <span className="score-val">{Math.round(mentor.content_score * 100)}%</span>
+                      </div>
+                      <div className="score-item">
+                        <span className="score-label">Collaborative</span>
+                        <div className="score-bar">
+                          <div className="score-fill collab" style={{ width: `${Math.round(mentor.collaborative_score * 100)}%` }}></div>
+                        </div>
+                        <span className="score-val">{Math.round(mentor.collaborative_score * 100)}%</span>
+                      </div>
+                      {mentor.schedule_overlap !== undefined && (
+                        <div className="score-meta">
+                          📅 {mentor.schedule_overlap} shared time slots &nbsp;•&nbsp;
+                          📚 {Math.round((mentor.subject_relevance || 0) * 100)}% subject relevance
+                          {mentor.style_match && ' • 🎯 Teaching style matched!'}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div className="mc-reasons">
                     <span className="reasons-label">Why this match:</span>
                     {mentor.reasons?.map((r, i) => (
@@ -91,7 +206,14 @@ const FindMentor = () => {
                   </div>
 
                   <div className="mc-actions">
-                    <button className="btn-connect">💬 Connect Now</button>
+                    <button
+                      className="btn-connect"
+                      onClick={() => openConnectModal(mentor)}
+                      disabled={mentor.mentor_id?.startsWith('demo')}
+                      title={mentor.mentor_id?.startsWith('demo') ? 'Demo mode — log in with a real account' : ''}
+                    >
+                      💬 Connect Now
+                    </button>
                   </div>
                 </div>
               ))
@@ -99,6 +221,47 @@ const FindMentor = () => {
           </div>
         )}
       </div>
+
+      {/* ── Connect Modal ─────────────────────────────────────────────────── */}
+      {connectModal && (
+        <div className="modal-overlay" onClick={closeConnectModal}>
+          <div className="modal-box" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <div className="modal-avatar">{connectModal.mentor.name?.charAt(0)}</div>
+              <div>
+                <h3>Connect with {connectModal.mentor.name}</h3>
+                <p>{connectModal.mentor.match_percentage}% compatibility match</p>
+              </div>
+            </div>
+
+            <div className="modal-body">
+              <label className="modal-label">What subject do you need help with?</label>
+              <div className="subject-grid">
+                {connectModal.mentor.mentor_details?.subject_expertise?.map((subj, i) => (
+                  <button
+                    key={i}
+                    className={`subject-btn ${selectedSubject === subj ? 'selected' : ''}`}
+                    onClick={() => setSelectedSubject(subj)}
+                  >
+                    {subj}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button className="btn-cancel" onClick={closeConnectModal}>Cancel</button>
+              <button
+                className="btn-start-session"
+                onClick={handleConnect}
+                disabled={!selectedSubject || connecting}
+              >
+                {connecting ? '⏳ Starting...' : '🚀 Start Session'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

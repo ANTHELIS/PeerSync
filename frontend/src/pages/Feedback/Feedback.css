@@ -30,4 +30,21 @@
 .feedback-success { text-align: center; padding: 80px 20px; }
 .success-icon { font-size: 4rem; display: block; margin-bottom: 20px; }
 .feedback-success h2 { font-size: 1.8rem; margin-bottom: 12px; }
-.feedback-success p { color: var(--text-secondary); margin-bottom: 32px; }
+.feedback-success p { color: var(--text-secondary); margin-bottom: 32px; line-height: 1.7; }
+.feedback-success .btn-primary,
+.feedback-success .btn-secondary { display: inline-block; margin: 6px; }
+
+.btn-secondary {
+  padding: 12px 28px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  border-radius: var(--radius-md);
+  font-size: 0.95rem; font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition);
+}
+.btn-secondary:hover { border-color: var(--text-muted); color: var(--text-primary); }
+
+.feedback-header p strong { color: var(--primary-light); }
+

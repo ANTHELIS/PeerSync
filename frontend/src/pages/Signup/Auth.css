@@ -120,3 +120,136 @@
   color: var(--primary-light);
   font-weight: 600;
 }
+
+/* ── Signup card (wider to accommodate role grid) ─────────────────────── */
+.signup-card { max-width: 540px; }
+
+/* ── Role Picker Step ──────────────────────────────────────────────────── */
+.role-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.role-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  background: var(--bg-input);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.2s, background 0.2s, transform 0.15s;
+}
+.role-card:hover {
+  border-color: var(--primary);
+  background: rgba(102,126,234,0.05);
+  transform: translateX(3px);
+}
+.role-card.selected {
+  border-color: var(--primary);
+  background: rgba(102,126,234,0.10);
+}
+.role-icon { font-size: 1.8rem; flex-shrink: 0; line-height: 1; }
+.role-label {
+  font-size: 0.97rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  display: block;
+  margin-bottom: 2px;
+}
+.role-desc {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  display: block;
+}
+.role-check {
+  position: absolute;
+  right: 16px; top: 50%;
+  transform: translateY(-50%);
+  width: 22px; height: 22px;
+  background: var(--gradient-primary);
+  border-radius: 50%;
+  color: white;
+  font-size: 0.72rem;
+  font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* ── Back button & selected badge ─────────────────────────────────────── */
+.back-btn {
+  background: none; border: none;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  cursor: pointer;
+  margin-bottom: 10px;
+  padding: 0;
+  display: block;
+  transition: color 0.2s;
+}
+.back-btn:hover { color: var(--text-secondary); }
+
+.role-selected-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 14px;
+  background: rgba(102,126,234,0.1);
+  border: 1px solid rgba(102,126,234,0.25);
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--primary-light);
+  margin-bottom: 12px;
+}
+
+/* ── Marks Toggle ──────────────────────────────────────────────────────── */
+.marks-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.marks-main-label {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.optional-tag {
+  font-size: 0.72rem;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 1px 8px;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+.marks-toggle {
+  display: flex;
+  gap: 8px;
+}
+.marks-btn {
+  padding: 8px 20px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+}
+.marks-btn:hover { border-color: var(--primary); color: var(--primary-light); }
+.marks-btn.active {
+  background: rgba(102,126,234,0.15);
+  border-color: var(--primary);
+  color: var(--primary-light);
+}
+
