@@ -22,6 +22,12 @@ const messageSchema = new mongoose.Schema(
       enum: ['text', 'image', 'file'],
       default: 'text',
     },
+    reactions: [
+      {
+        emoji:  { type: String, required: true },
+        userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+      },
+    ],
   },
   {
     timestamps: true, // createdAt serves as the message timestamp

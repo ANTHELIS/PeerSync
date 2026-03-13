@@ -1,11 +1,14 @@
 const User = require('../models/User');
 const generateToken = require('../utils/generateToken');
 
-// @desc    Register a new user
-// @route   POST /api/auth/signup
 const signup = async (req, res) => {
   try {
-    const { name, email, password, college, semester } = req.body;
+    const {
+      name, email, password,
+      college, semester,
+      userType, institution, grade,
+      marksType, marksValue,
+    } = req.body;
 
     const existingUser = await User.findOne({ email });
     if (existingUser) {
@@ -16,18 +19,28 @@ const signup = async (req, res) => {
       name,
       email,
       password,
-      college: college || '',
-      semester: semester || 1,
+      college:      college      || '',
+      semester:     semester     || 1,
+      userType:     userType     || 'college_student',
+      institution:  institution  || '',
+      grade:        grade        || '',
+      marksType:    marksType    || '',
+      marksValue:   marksValue   != null ? Number(marksValue) : null,
     });
 
     res.status(201).json({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      college: user.college,
-      semester: user.semester,
-      onboardingComplete: user.onboardingComplete,
-      token: generateToken(user._id),
+      _id:               user._id,
+      name:              user.name,
+      email:             user.email,
+      college:           user.college,
+      semester:          user.semester,
+      userType:          user.userType,
+      institution:       user.institution,
+      grade:             user.grade,
+      marksType:         user.marksType,
+      marksValue:        user.marksValue,
+      onboardingComplete:user.onboardingComplete,
+      token:             generateToken(user._id),
     });
   } catch (error) {
     console.error('Signup error:', error.message);
@@ -74,20 +87,22 @@ const getMe = async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
     res.json({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      college: user.college,
-      semester: user.semester,
-      learningStyle: user.learningStyle,
-      subjectsNeeded: user.subjectsNeeded,
-      subjectsStrong: user.subjectsStrong,
-      availability: user.availability,
-      gpa: user.gpa,
-      isMentor: user.isMentor,
-      mentorProfile: user.mentorProfile,
-      onboardingComplete: user.onboardingComplete,
-      profilePicture: user.profilePicture,
+      _id:               user._id,
+      name:              user.name,
+      email:             user.email,
+      college:           user.college,
+      semester:          user.semester,
+      learningStyle:     user.learningStyle,
+      subjectsNeeded:    user.subjectsNeeded,
+      subjectsStrong:    user.subjectsStrong,
+      availability:      user.availability,
+      gpa:               user.gpa,
+      isMentor:          user.isMentor,
+      mentorProfile:     user.mentorProfile,
+      onboardingComplete:user.onboardingComplete,
+      quizCompleted:     user.quizCompleted,
+      skillScores:       user.skillScores,
+      profilePicture:    user.profilePicture,
     });
   } catch (error) {
     console.error('GetMe error:', error.message);

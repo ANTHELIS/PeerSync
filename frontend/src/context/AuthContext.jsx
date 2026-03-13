@@ -39,8 +39,9 @@ export const AuthProvider = ({ children }) => {
     return userData;
   };
 
-  const signup = async (name, email, password, college, semester) => {
-    const res = await api.post('/auth/signup', { name, email, password, college, semester });
+  const signup = async (name, email, password, college, semester, extraPayload = {}) => {
+    const body = { name, email, password, college, semester, ...extraPayload };
+    const res = await api.post('/auth/signup', body);
     const { token, ...userData } = res.data;
     localStorage.setItem('peersync_token', token);
     localStorage.setItem('peersync_user', JSON.stringify(userData));
