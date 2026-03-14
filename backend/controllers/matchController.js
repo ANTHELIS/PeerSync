@@ -56,15 +56,59 @@ const findMentors = async (req, res) => {
       { timeout: 10000 }
     );
 
-    const recommendations = mlResponse.data.recommendations || [];
+    let recommendations = mlResponse.data.recommendations || [];
 
     if (recommendations.length > 0) {
-      return res.json({
-        student: student.name,
-        recommendations,
-        source: 'ai',
-        quizVerified: student.quizCompleted,   // flag for frontend to display badge
-      });
+      // The ML service uses dummy IDs like "M1" and strings like "Mentor_1"
+      // We need to map these to REAL MongoDB mentors so sessions can be created.
+      const mappedRecommendations = [];
+      const usedIds = new Set(); // Prevent suggesting the same real mentor twice
+
+      for (const rec of recommendations) {
+        // Try to find a real mentor who matches at least one of the subjects from the AI's picked mentor
+        const subjects = rec.mentor_details?.subject_expertise || [];
+        const query = {
+          isMentor: true,
+          _id: { $ne: student._id, $nin: Array.from(usedIds) },
+        };
+        
+        if (subjects.length > 0) {
+          query['mentorProfile.subjectExpertise'] = { $in: subjects };
+        }
+
+        let realMentor = await User.findOne(query);
+
+        // Fallback if no specific subject match is found
+        if (!realMentor) {
+          realMentor = await User.findOne({
+            isMentor: true,
+            _id: { $ne: student._id, $nin: Array.from(usedIds) }
+          });
+        }
+
+        if (realMentor) {
+          usedIds.add(realMentor._id);
+          
+          // Overwrite the dummy specific data with real specific data
+          rec.mentor_id = realMentor._id;
+          rec.name = realMentor.name;
+          if (rec.mentor_details) {
+            rec.mentor_details.semester = realMentor.semester;
+            rec.mentor_details.teaching_style = realMentor.mentorProfile?.teachingStyle || rec.mentor_details.teaching_style;
+            rec.mentor_details.subject_expertise = realMentor.mentorProfile?.subjectExpertise || rec.mentor_details.subject_expertise;
+          }
+          mappedRecommendations.push(rec);
+        }
+      }
+
+      if (mappedRecommendations.length > 0) {
+        return res.json({
+          student: student.name,
+          recommendations: mappedRecommendations,
+          source: 'ai',
+          quizVerified: student.quizCompleted,   // flag for frontend to display badge
+        });
+      }
     }
 
     console.log('⚠️ ML returned 0 results — using MongoDB fallback');

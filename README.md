@@ -121,32 +121,83 @@ Open **http://localhost:5173** in your browser. You can now:
 
 ### Step 5: Start the ML Service (Terminal 3 — Optional)
 
-The ML service powers the AI recommendation engine. The app works without it (uses demo data), but for full functionality:
+The ML service powers the **AI recommendation engine** (Content-Based + Collaborative Filtering). The app works without it (uses demo data), but for full AI-powered mentor matching you need this running.
+
+#### 5a. Create & Activate a Virtual Environment
+
+> **Note:** The project already has a `.venv` at the root. You can reuse it or create a fresh one inside `ml-service/`.
+
+**Option 1 — Use the existing root `.venv`:**
+
+```bash
+# From the project root (PeerSync/)
+.venv\Scripts\activate        # Windows (CMD / PowerShell)
+# source .venv/bin/activate   # macOS / Linux
+```
+
+**Option 2 — Create a new venv inside ml-service:**
 
 ```bash
 cd ml-service
+python -m venv venv
+venv\Scripts\activate          # Windows
+# source venv/bin/activate     # macOS / Linux
+```
+
+#### 5b. Install Dependencies
+
+```bash
+cd ml-service                  # skip if already inside
 pip install -r requirements.txt
 ```
 
-Generate the training data:
+This installs: `fastapi`, `uvicorn`, `scikit-learn`, `pandas`, `numpy`, `pydantic`, `joblib`, `python-dotenv`.
+
+#### 5c. Generate Training Data
+
 ```bash
 python data/generate_data.py
 ```
 
-Start the service:
+This creates synthetic mentor/student/session datasets inside `ml-service/data/` that the recommender model trains on at startup.
+
+#### 5d. Start the Service
+
 ```bash
-uvicorn app:app --host 0.0.0.0 --port 8000 --reload
+python -m uvicorn app:app --host 0.0.0.0 --port 8000 --reload
+```
+
+**Or use the included batch file (Windows):**
+
+```bash
+.\start-ml.bat          # PowerShell
+start-ml.bat            # CMD
 ```
 
 ✅ You should see:
 ```
+============================================================
   PeerSync ML Microservice Starting...
-  Loaded 200 mentors
-  Loaded 5000 students
-  Loaded ~50000 sessions/ratings
-  Collaborative filter trained
-  ML Engine Ready!
+============================================================
+  ML Engine Ready! Accepting requests.
+============================================================
+  INFO:     Uvicorn running on http://0.0.0.0:8000
 ```
+
+#### 🔍 Verify it's Working
+
+- **Swagger Docs:** [http://localhost:8000/docs](http://localhost:8000/docs)
+- **Health Check:** `GET http://localhost:8000/api/ml/health`
+- **Root Info:** `GET http://localhost:8000/`
+
+#### ⚠️ Troubleshooting
+
+| Problem | Solution |
+|---------|----------|
+| `pip` / `python` not found | Make sure Python 3.10+ is installed and on your PATH |
+| `ModuleNotFoundError` | Ensure you activated the virtual environment before `pip install` |
+| Port 8000 already in use | Change the port: `--port 8001` and update `backend/.env` accordingly |
+| Data files missing | Run `python data/generate_data.py` before starting the service |
 
 ---
 

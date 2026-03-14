@@ -33,6 +33,14 @@ const userSchema = new mongoose.Schema(
       default: 1,
     },
 
+    // --- Permanent Role (set at registration, never changes) ---
+    role: {
+      type: String,
+      enum: ['mentor', 'student'],
+      required: [true, 'Role is required'],
+      immutable: true,  // Mongoose will reject any update to this field
+    },
+
     // --- User Classification ---
     userType: {
       type: String,
@@ -88,7 +96,7 @@ const userSchema = new mongoose.Schema(
       default: 0,
     },
 
-    // --- Mentor Status ---
+    // --- Mentor Status (derived from role, kept for queries/seed compat) ---
     isMentor: {
       type: Boolean,
       default: false,
@@ -132,6 +140,10 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    lastQuizAt: {
+      type: Date,
+      default: null,    // null = never taken
+    },
     skillScores: {
       // e.g. { 'Data Structures': { score: 80, level: 'Advanced', correct: 4, total: 5, testedAt: Date } }
       type: Map,
@@ -143,6 +155,21 @@ const userSchema = new mongoose.Schema(
         testedAt: { type: Date, default: Date.now },
       }, { _id: false }),
       default: {},
+    },
+
+    // --- Active Quiz (AI-generated, stored server-side for secure scoring) ---
+    activeQuiz: {
+      type: [new mongoose.Schema({
+        id:       String,
+        subject:  String,
+        question: String,
+        options:  [String],
+        correct:  Number,      // index of correct option (0-3)
+        level:    String,
+        type:     String,      // 'weak' or 'strong'
+      }, { _id: false })],
+      default: [],
+      select: false,  // never leak to client by default
     },
 
     // --- Profile Completion ---

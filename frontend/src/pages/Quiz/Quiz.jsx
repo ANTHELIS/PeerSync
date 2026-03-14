@@ -4,8 +4,6 @@ import { useAuth } from '../../context/AuthContext';
 import api from '../../services/api';
 import './Quiz.css';
 
-const QUESTION_TIME = 30; // seconds per question
-
 const LEVEL_CONFIG = {
   Expert:       { color: '#a78bfa', bg: 'rgba(167,139,250,0.12)', icon: '🏆' },
   Advanced:     { color: '#4ade80', bg: 'rgba(74,222,128,0.12)',  icon: '⚡' },
@@ -25,39 +23,115 @@ const Quiz = () => {
   const navigate = useNavigate();
 
   // ── State ──────────────────────────────────────────────────────────────────
-  const [phase, setPhase]         = useState('loading');   // loading|intro|quiz|results
+  const [phase, setPhase]         = useState('loading');   // loading|pick-subjects|intro|quiz|results|cooldown
   const [questions, setQuestions] = useState([]);
   const [currentIdx, setCurrentIdx] = useState(0);
   const [answers, setAnswers]     = useState([]);
-  const [selected, setSelected]   = useState(null);       // selected option for current Q
-  const [timeLeft, setTimeLeft]   = useState(QUESTION_TIME);
+  const [selected, setSelected]   = useState(null);
+  const [questionTime, setQuestionTime] = useState(10);
+  const [timeLeft, setTimeLeft]   = useState(10);
   const [results, setResults]     = useState(null);
-  const [profileUpdate, setProfileUpdate] = useState(null); // { promoted, demoted, confirmed, updatedStrong, updatedNeeded }
+  const [profileUpdate, setProfileUpdate] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [alreadyDone, setAlreadyDone] = useState(false);
   const [animating, setAnimating] = useState(false);
+  const [quizRole, setQuizRole]   = useState('student');
+  const [quizSource, setQuizSource] = useState('static');
+  const [cooldownEnd, setCooldownEnd] = useState(null);    // Date ISO string
+  const [countdown, setCountdown] = useState('');          // "5h 23m 12s"
+  const [availableSubjects, setAvailableSubjects] = useState([]);
+  const [selectedSubjects, setSelectedSubjects] = useState([]);
+  const [generating, setGenerating] = useState(false);
 
   const timerRef = useRef(null);
+  const cooldownRef = useRef(null);
 
-  // ── Load Quiz ──────────────────────────────────────────────────────────────
+  // ── Cooldown countdown ticker ──────────────────────────────────────────────
   useEffect(() => {
-    api.get('/quiz/generate')
+    if (!cooldownEnd) return;
+    const tick = () => {
+      const diff = new Date(cooldownEnd).getTime() - Date.now();
+      if (diff <= 0) {
+        setCountdown('');
+        setCooldownEnd(null);
+        setPhase('loading');
+        window.location.reload();   // auto-refresh when cooldown expires
+        return;
+      }
+      const h = Math.floor(diff / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      setCountdown(`${h}h ${m}m ${s}s`);
+    };
+    tick();
+    cooldownRef.current = setInterval(tick, 1000);
+    return () => clearInterval(cooldownRef.current);
+  }, [cooldownEnd]);
+
+  // ── Load Quiz Status ───────────────────────────────────────────────────────
+  useEffect(() => {
+    api.get('/quiz/status')
       .then(res => {
-        if (res.data.alreadyCompleted) {
+        if (res.data.cooldown) {
+          setCooldownEnd(res.data.nextAvailableAt);
+          setResults(res.data.skillScores);
+          setPhase('cooldown');
+        } else if (res.data.alreadyCompleted) {
+          // This allows viewing old scores if needed (currently disabled in backend default)
           setAlreadyDone(true);
           setResults(res.data.skillScores);
           setPhase('results');
         } else {
-          setQuestions(res.data.questions);
-          setAnswers(new Array(res.data.total).fill(-1));
-          setPhase('intro');
+          // Ready to take a new quiz — ask which subjects
+          const avail = res.data.availableSubjects || [];
+          const userSubjs = res.data.userSubjects || [];
+          setAvailableSubjects(avail);
+          // Pre-select subjects the user already has (or none if they haven't picked any)
+          setSelectedSubjects([...userSubjs]); 
+          setQuizRole(res.data.role || 'student');
+          setPhase('pick-subjects');
         }
       })
       .catch(err => {
-        console.error('Quiz load error:', err.message);
+        console.error('Quiz status error:', err.message);
         navigate('/dashboard');
       });
   }, []);
+
+  // ── Generate quiz for selected subjects ────────────────────────────────────
+  const generateForSubjects = async () => {
+    if (selectedSubjects.length === 0) return;
+    setGenerating(true);
+    try {
+      const res = await api.post('/quiz/generate', { subjects: selectedSubjects });
+      if (res.data.cooldown) {
+        setCooldownEnd(res.data.nextAvailableAt);
+        setResults(res.data.skillScores);
+        setPhase('cooldown');
+        return;
+      }
+      const timer = res.data.timerPerQuestion || 10;
+      setQuestions(res.data.questions);
+      setAnswers(new Array(res.data.total).fill(-1));
+      setQuestionTime(timer);
+      setTimeLeft(timer);
+      setQuizSource(res.data.source || 'static');
+      setCurrentIdx(0);
+      setSelected(null);
+      setPhase('intro');
+    } catch (err) {
+      console.error('Generate error:', err.message);
+      alert(err.response?.data?.message || 'Failed to generate quiz');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const toggleSubject = (subj) => {
+    setSelectedSubjects(prev =>
+      prev.includes(subj) ? prev.filter(s => s !== subj) : [...prev, subj]
+    );
+  };
 
   // ── Timer ──────────────────────────────────────────────────────────────────
   const advanceQuestion = useCallback(() => {
@@ -70,11 +144,11 @@ const Quiz = () => {
       } else {
         setCurrentIdx(next);
         setSelected(null);
-        setTimeLeft(QUESTION_TIME);
+        setTimeLeft(questionTime);
         setAnimating(false);
       }
     }, 350);
-  }, [currentIdx, questions.length, answers]);
+  }, [currentIdx, questions.length, answers, questionTime]);
 
   useEffect(() => {
     if (phase !== 'quiz') return;
@@ -82,24 +156,24 @@ const Quiz = () => {
       setTimeLeft(t => {
         if (t <= 1) {
           advanceQuestion();
-          return QUESTION_TIME;
+          return questionTime;
         }
         return t - 1;
       });
     }, 1000);
     return () => clearInterval(timerRef.current);
-  }, [phase, currentIdx, advanceQuestion]);
+  }, [phase, currentIdx, advanceQuestion, questionTime]);
 
   // ── Select Answer ──────────────────────────────────────────────────────────
   const selectAnswer = (optIdx) => {
-    if (selected !== null) return; // already answered
+    if (selected !== null) return;
     setSelected(optIdx);
     const newAnswers = [...answers];
     newAnswers[currentIdx] = optIdx;
     setAnswers(newAnswers);
 
-    // Auto-advance after 1.2s
-    setTimeout(() => advanceQuestion(), 1200);
+    // Auto-advance after brief delay
+    setTimeout(() => advanceQuestion(), 800);
   };
 
   // ── Submit Quiz ────────────────────────────────────────────────────────────
@@ -109,11 +183,10 @@ const Quiz = () => {
     setPhase('loading');
 
     try {
-      const res = await api.post('/quiz/submit', { questions, answers });
+      const res = await api.post('/quiz/submit', { answers });
       setResults(res.data.results);
       setProfileUpdate(res.data.profileUpdate || null);
 
-      // Update AuthContext so navbar/profile reflect the AI-corrected subjects
       updateUser({
         quizCompleted:  true,
         subjectsStrong: res.data.profileUpdate?.updatedStrong || [],
@@ -136,15 +209,102 @@ const Quiz = () => {
 
   const currentQ   = questions[currentIdx];
   const progress   = questions.length > 0 ? ((currentIdx) / questions.length) * 100 : 0;
-  const timerPct   = (timeLeft / QUESTION_TIME) * 100;
-  const subjectsDone = [...new Set(answers.slice(0, currentIdx).map((_, i) => questions[i]?.subject).filter(Boolean))];
+  const timerPct   = (timeLeft / questionTime) * 100;
+
+  // Timer thresholds scale with questionTime
+  const urgentThreshold  = Math.ceil(questionTime * 0.3);  // 30% of total
+  const warningThreshold = Math.ceil(questionTime * 0.5);  // 50% of total
 
   // ── PHASE: Loading ─────────────────────────────────────────────────────────
   if (phase === 'loading') return (
     <div className="quiz-page">
       <div className="quiz-loading">
         <div className="quiz-spinner"></div>
-        <p>{submitting ? '🧠 AI is analyzing your answers...' : 'Loading your assessment...'}</p>
+        <p>{submitting ? '🧠 AI is analyzing your answers...' : generating ? '🤖 AI is crafting unique questions for you...' : 'Loading your assessment...'}</p>
+      </div>
+    </div>
+  );
+
+  // ── PHASE: Pick Subjects ───────────────────────────────────────────────────
+  if (phase === 'pick-subjects') return (
+    <div className="quiz-page">
+      <div className="quiz-intro fade-in">
+        <div className="qi-badge">
+          {quizRole === 'mentor' ? '🎓 Mentor Assessment' : '📖 Student Assessment'}
+        </div>
+        <h1>Choose Your Subjects</h1>
+        <p className="qi-subtitle">Select the subjects you want to be tested on today.</p>
+
+        <div className="qi-subject-picker">
+          {availableSubjects.map(subj => {
+            const isSelected = selectedSubjects.includes(subj);
+            return (
+              <button
+                key={subj}
+                className={`qi-subject-btn ${isSelected ? 'active' : ''}`}
+                onClick={() => toggleSubject(subj)}
+              >
+                <span>{SUBJECT_EMOJIS[subj] || '📚'}</span>
+                {subj}
+              </button>
+            );
+          })}
+        </div>
+
+        <button
+          className="btn-start-quiz"
+          disabled={selectedSubjects.length === 0 || generating}
+          onClick={generateForSubjects}
+          style={{ marginTop: 24 }}
+        >
+          {generating ? 'Generating...' : `Generate Quiz (${selectedSubjects.length} selected) →`}
+        </button>
+      </div>
+    </div>
+  );
+
+  // ── PHASE: Cooldown (already taken today) ──────────────────────────────────
+  if (phase === 'cooldown') return (
+    <div className="quiz-page">
+      <div className="quiz-intro fade-in">
+        <div className="qi-cooldown-icon">⏳</div>
+        <h1>Come back tomorrow!</h1>
+        <p className="qi-subtitle">
+          You've already taken the quiz today. You can retake it once every <strong>24 hours</strong> to update your skill profile.
+        </p>
+
+        {countdown && (
+          <div className="qi-countdown">
+            <span className="qi-countdown-label">Next attempt available in</span>
+            <span className="qi-countdown-timer">{countdown}</span>
+          </div>
+        )}
+
+        {/* Show existing scores if available */}
+        {groupedResults.length > 0 && (
+          <div className="qi-existing-scores">
+            <h3>Your Current Skill Scores</h3>
+            <div className="qi-score-pills">
+              {groupedResults.map(([subject, data]) => {
+                const score = data?.score ?? 0;
+                const level = data?.level ?? 'Beginner';
+                const cfg = LEVEL_CONFIG[level];
+                return (
+                  <div key={subject} className="qi-score-pill" style={{ borderColor: cfg.color + '44' }}>
+                    <span>{SUBJECT_EMOJIS[subject] || '📚'}</span>
+                    <span className="qi-sp-name">{subject}</span>
+                    <span className="qi-sp-score" style={{ color: cfg.color }}>{score}%</span>
+                    <span className="qi-sp-level" style={{ background: cfg.bg, color: cfg.color }}>{level}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        <button className="btn-start-quiz" onClick={() => navigate('/dashboard')} style={{ marginTop: 24 }}>
+          ← Back to Dashboard
+        </button>
       </div>
     </div>
   );
@@ -153,12 +313,19 @@ const Quiz = () => {
   if (phase === 'intro') return (
     <div className="quiz-page">
       <div className="quiz-intro fade-in">
-        <div className="qi-badge">🎯 Skill Assessment</div>
+        <div className="qi-badge">
+          {quizRole === 'mentor' ? '🎓 Mentor Assessment' : '📖 Student Assessment'}
+        </div>
+        {quizSource === 'gemini' && (
+          <div className="qi-ai-badge">✨ AI-Generated Questions — Every attempt is unique!</div>
+        )}
         <h1>Let's verify your skills!</h1>
         <p className="qi-subtitle">
           Answer <strong>{questions.length} questions</strong> across{' '}
           <strong>{[...new Set(questions.map(q => q.subject))].length} subjects</strong> to build your verified skill profile.
-          This helps us match you with the right mentors — and certify you as a mentor in your strong areas.
+          {quizRole === 'mentor'
+            ? ' As a mentor, you have a stricter time limit to prove your expertise.'
+            : ' This helps us match you with the right mentors.'}
         </p>
 
         <div className="qi-subjects">
@@ -171,13 +338,17 @@ const Quiz = () => {
         </div>
 
         <div className="qi-rules">
-          <div className="qi-rule">⏱️ <strong>30 seconds</strong> per question</div>
-          <div className="qi-rule">🔄 Questions advance automatically on answer</div>
+          <div className="qi-rule">
+            ⏱️ <strong>{questionTime} seconds</strong> per question
+            {quizRole === 'mentor' && <span className="qi-role-tag mentor">Mentor pace</span>}
+            {quizRole === 'student' && <span className="qi-role-tag student">Student pace</span>}
+          </div>
+          <div className="qi-rule">🔀 Questions are <strong>randomized</strong> every attempt</div>
           <div className="qi-rule">🤖 AI judges your skill level: Beginner → Expert</div>
           <div className="qi-rule">✅ Results update your profile & improve matches</div>
         </div>
 
-        <button className="btn-start-quiz" onClick={() => { setPhase('quiz'); setTimeLeft(QUESTION_TIME); }}>
+        <button className="btn-start-quiz" onClick={() => { setPhase('quiz'); setTimeLeft(questionTime); }}>
           🚀 Start Assessment
         </button>
       </div>
@@ -208,7 +379,7 @@ const Quiz = () => {
             <circle cx="30" cy="30" r="26" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="4"/>
             <circle
               cx="30" cy="30" r="26" fill="none"
-              stroke={timeLeft <= 8 ? '#f87171' : timeLeft <= 15 ? '#fbbf24' : '#4ade80'}
+              stroke={timeLeft <= urgentThreshold ? '#f87171' : timeLeft <= warningThreshold ? '#fbbf24' : '#4ade80'}
               strokeWidth="4" strokeLinecap="round"
               strokeDasharray={`${2 * Math.PI * 26}`}
               strokeDashoffset={`${2 * Math.PI * 26 * (1 - timerPct / 100)}`}
@@ -216,7 +387,7 @@ const Quiz = () => {
               transform="rotate(-90 30 30)"
             />
           </svg>
-          <span className={`qz-timer-num ${timeLeft <= 8 ? 'urgent' : ''}`}>{timeLeft}</span>
+          <span className={`qz-timer-num ${timeLeft <= urgentThreshold ? 'urgent' : ''}`}>{timeLeft}</span>
         </div>
 
         {/* Question */}
@@ -342,23 +513,25 @@ const Quiz = () => {
 
             {!alreadyDone && (
               <div className="qr-note">
-                ✅ subjectsStrong and subjectsNeeded updated. ML matching now uses verified scores.
+                ✅ Profile updated! You can retake this assessment in <strong>24 hours</strong> to update your scores.
               </div>
             )}
-            <button className="btn-primary qr-btn" onClick={() => navigate('/find-mentor')}>
-              🔍 Find My Best Mentors
-            </button>
+            {!user?.isMentor ? (
+              <button className="btn-primary qr-btn" onClick={() => navigate('/find-mentor')}>
+                🔍 Find My Best Mentors
+              </button>
+            ) : (
+              <button className="btn-primary qr-btn" onClick={() => navigate('/mentor-dashboard')}>
+                📊 Go to Mentor Hub
+              </button>
+            )}
             <button className="btn-secondary qr-btn" onClick={() => navigate('/dashboard')}>
               Go to Dashboard
             </button>
             {!alreadyDone && (
-              <button className="qr-retake" onClick={async () => {
-                await api.delete('/quiz/reset');
-                updateUser({ quizCompleted: false });
-                window.location.reload();
-              }}>
-                🔄 Retake Assessment
-              </button>
+              <div className="qr-retake-note">
+                🔄 You can retake the quiz tomorrow to improve your skill profile.
+              </div>
             )}
           </div>
         </div>

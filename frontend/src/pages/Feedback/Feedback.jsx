@@ -26,9 +26,10 @@ const Feedback = () => {
       .catch(err => console.error('Failed to load session:', err.message));
   }, [sessionId]);
 
-  const mentorId   = session?.mentorId?._id || session?.mentorId;
-  const mentorName = session?.mentorId?.name || 'your mentor';
-  const subject    = session?.subject || 'your session';
+  const sessionMentorId   = session?.mentorId?._id || session?.mentorId;
+  const isSessionMentor   = user?._id === sessionMentorId;
+  const partnerName       = isSessionMentor ? (session?.studentId?.name || 'your student') : (session?.mentorId?.name || 'your mentor');
+  const subject           = session?.subject || 'your session';
 
   // ── Sub-components ────────────────────────────────────────────────────────
   const StarRow = ({ label, value, setter }) => (
@@ -72,7 +73,9 @@ const Feedback = () => {
     try {
       await api.post('/feedback', {
         sessionId,
-        mentorId,
+        mentorId: sessionMentorId,
+        studentId: session?.studentId?._id || session?.studentId,
+        isSessionMentor,
         overallRating,
         helpfulnessRating: helpfulness || 3,
         clarityRating:     clarity     || 3,
@@ -98,9 +101,15 @@ const Feedback = () => {
             <span className="success-icon">🎉</span>
             <h2>Thank you for your feedback!</h2>
             <p>Your rating helps our AI make smarter matches for everyone.</p>
-            <button className="btn-primary" onClick={() => navigate('/find-mentor')}>
-              🔍 Find Another Mentor →
-            </button>
+            {!user?.isMentor ? (
+              <button className="btn-primary" onClick={() => navigate('/find-mentor')}>
+                🔍 Find Another Mentor →
+              </button>
+            ) : (
+              <button className="btn-primary" onClick={() => navigate('/mentor-dashboard')}>
+                📊 Go to Mentor Hub →
+              </button>
+            )}
             <button className="btn-secondary" onClick={() => navigate('/dashboard')}>
               Back to Dashboard
             </button>
@@ -118,18 +127,18 @@ const Feedback = () => {
           <div className="feedback-header">
             <h1>⭐ Rate Your Session</h1>
             <p>
-              How was your session with <strong>{mentorName}</strong> on <strong>{subject}</strong>?<br />
+              How was your session with <strong>{partnerName}</strong> on <strong>{subject}</strong>?<br />
               Your feedback trains PeerSync AI to make even better matches.
             </p>
           </div>
 
           <div className="feedback-body">
-            <StarRow label="Overall Experience"        value={overallRating} setter={setOverallRating} />
-            <StarRow label="Helpfulness"               value={helpfulness}   setter={setHelpfulness} />
-            <StarRow label="Clarity of Explanation"    value={clarity}       setter={setClarity} />
+            <StarRow label="Overall Experience" value={overallRating} setter={setOverallRating} />
+            <StarRow label={isSessionMentor ? "Student's Engagement" : "Helpfulness"} value={helpfulness} setter={setHelpfulness} />
+            <StarRow label={isSessionMentor ? "Ease of Teaching" : "Clarity of Explanation"} value={clarity} setter={setClarity} />
 
             <ToggleRow
-              label="Did the teaching style match your learning style?"
+              label={isSessionMentor ? "Did the student grasp the concepts well?" : "Did the teaching style match your learning style?"}
               value={styleMatch} setter={setStyleMatch}
               options={[
                 { value: 'yes',      label: '✓ Yes' },
@@ -139,7 +148,7 @@ const Feedback = () => {
             />
 
             <ToggleRow
-              label="Would you study with this mentor again?"
+              label={isSessionMentor ? "Would you mentor this student again?" : "Would you study with this mentor again?"}
               value={wouldRepeat} setter={setWouldRepeat}
               options={[
                 { value: 'yes',   label: '✓ Yes' },

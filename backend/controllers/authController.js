@@ -8,17 +8,27 @@ const signup = async (req, res) => {
       college, semester,
       userType, institution, grade,
       marksType, marksValue,
+      role,   // 'mentor' or 'student' — chosen at registration, permanent
     } = req.body;
+
+    // ── Validate role ────────────────────────────────────────────────────
+    if (!role || !['mentor', 'student'].includes(role)) {
+      return res.status(400).json({ message: 'Please choose a role: mentor or student' });
+    }
 
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(400).json({ message: 'An account with this email already exists' });
     }
 
+    const isMentor = role === 'mentor';
+
     const user = await User.create({
       name,
       email,
       password,
+      role,                                         // permanent
+      isMentor,                                     // derived
       college:      college      || '',
       semester:     semester     || 1,
       userType:     userType     || 'college_student',
@@ -26,12 +36,26 @@ const signup = async (req, res) => {
       grade:        grade        || '',
       marksType:    marksType    || '',
       marksValue:   marksValue   != null ? Number(marksValue) : null,
+      // If registering as mentor, pre-populate mentorProfile shell
+      ...(isMentor && {
+        mentorProfile: {
+          teachingStyle: '',
+          subjectExpertise: [],
+          mentorAvailability: [],
+          patienceScore: 4.0,
+          totalSessions: 0,
+          avgRating: 0,
+          totalRatings: 0,
+        },
+      }),
     });
 
     res.status(201).json({
       _id:               user._id,
       name:              user.name,
       email:             user.email,
+      role:              user.role,
+      isMentor:          user.isMentor,
       college:           user.college,
       semester:          user.semester,
       userType:          user.userType,
@@ -68,11 +92,12 @@ const login = async (req, res) => {
       _id: user._id,
       name: user.name,
       email: user.email,
+      role: user.role,
+      isMentor: user.isMentor,
       college: user.college,
       semester: user.semester,
       learningStyle: user.learningStyle,
       onboardingComplete: user.onboardingComplete,
-      isMentor: user.isMentor,
       token: generateToken(user._id),
     });
   } catch (error) {
@@ -90,6 +115,8 @@ const getMe = async (req, res) => {
       _id:               user._id,
       name:              user.name,
       email:             user.email,
+      role:              user.role,
+      isMentor:          user.isMentor,
       college:           user.college,
       semester:          user.semester,
       learningStyle:     user.learningStyle,
@@ -97,7 +124,6 @@ const getMe = async (req, res) => {
       subjectsStrong:    user.subjectsStrong,
       availability:      user.availability,
       gpa:               user.gpa,
-      isMentor:          user.isMentor,
       mentorProfile:     user.mentorProfile,
       onboardingComplete:user.onboardingComplete,
       quizCompleted:     user.quizCompleted,

@@ -19,13 +19,28 @@ const MentorDashboard = () => {
           api.get('/sessions'),
         ]);
 
-        if (statsRes.status === 'fulfilled') setStats(statsRes.value.data);
-        else setStats({ totalSessions: 23, completedSessions: 20, avgRating: 4.7, totalRatings: 18, totalHours: 31.5 });
+        let calculatedStats = { totalSessions: 0, completedSessions: 0, avgRating: 0, totalRatings: 0, totalHours: 0 };
+
+        if (statsRes.status === 'fulfilled') {
+          calculatedStats = { ...calculatedStats, ...statsRes.value.data };
+        }
 
         if (sessRes.status === 'fulfilled') {
-          const active = sessRes.value.data.filter(s => s.status === 'active');
+          const sessions = sessRes.value.data;
+          const active = sessions.filter(s => s.status === 'active');
           setActiveSessions(active);
+
+          const completed = sessions.filter(s => s.status === 'completed');
+          calculatedStats.totalSessions = completed.length;
+          calculatedStats.completedSessions = completed.length;
+          
+          const totalMins = completed.reduce((acc, curr) => acc + (curr.durationMinutes || 0), 0);
+          calculatedStats.totalHours = Math.round((totalMins / 60) * 10) / 10;
         }
+
+        setStats(calculatedStats);
+      } catch (err) {
+        console.error('Failed to load mentor dashboard data', err);
       } finally {
         setLoading(false);
       }
@@ -117,7 +132,14 @@ const MentorDashboard = () => {
               <div className="md-info-row">
                 <span>Expertise</span>
                 <div className="tag-list">
-                  {(user?.mentorProfile?.subjectExpertise || user?.subjectsStrong || []).map((s, i) => (
+                  {(user?.mentorProfile?.subjectExpertise || user?.subjectsStrong || [])
+                    .filter(s => {
+                      // If quiz was completed, only show subjects with score > 70%
+                      if (!user?.quizCompleted || !user?.skillScores) return true;
+                      const scoreData = user.skillScores[s] || user.skillScores?.get?.(s);
+                      return !scoreData || scoreData.score > 70;
+                    })
+                    .map((s, i) => (
                     <span key={i} className="tag tag-green">{s}</span>
                   ))}
                 </div>

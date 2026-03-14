@@ -10,6 +10,12 @@ const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const SLOTS = ['Morning', 'Afternoon', 'Evening'];
 
 const Onboarding = () => {
+  const { user, updateUser } = useAuth();
+  const isMentor = user?.isMentor;
+
+  // Mentors skip Step 2 (subjectsNeeded), so steps are: 1,3,4 → mapped to 1,2,3
+  const totalSteps = isMentor ? 3 : 4;
+
   const [step, setStep] = useState(1);
   const [learningStyle, setLearningStyle] = useState('');
   const [subjectsNeeded, setSubjectsNeeded] = useState([]);
@@ -17,7 +23,6 @@ const Onboarding = () => {
   const [availability, setAvailability] = useState([]);
   const [gpa, setGpa] = useState('');
   const [loading, setLoading] = useState(false);
-  const { updateUser } = useAuth();
   const navigate = useNavigate();
 
   const toggleSubject = (subject, type) => {
@@ -34,10 +39,14 @@ const Onboarding = () => {
     setLoading(true);
     try {
       const res = await api.put('/students/onboarding', {
-        learningStyle, subjectsNeeded, subjectsStrong, availability, gpa: parseFloat(gpa) || 0,
+        learningStyle,
+        subjectsNeeded: isMentor ? [] : subjectsNeeded,
+        subjectsStrong,
+        availability,
+        gpa: parseFloat(gpa) || 0,
       });
       updateUser({ ...res.data.profile, onboardingComplete: true });
-      navigate('/quiz'); // → skill assessment quiz
+      navigate('/quiz');
     } catch (err) {
       alert(err.response?.data?.message || 'Error saving profile');
     } finally {
@@ -45,18 +54,37 @@ const Onboarding = () => {
     }
   };
 
+  // ── Map logical step to content ────────────────────────────────────────────
+  // For mentors: step 1 = style, step 2 = availability, step 3 = expertise + GPA
+  // For students: step 1 = style, step 2 = subjects needed, step 3 = availability, step 4 = strong + GPA
+  const getContentStep = () => {
+    if (isMentor) {
+      if (step === 1) return 'style';
+      if (step === 2) return 'availability';
+      if (step === 3) return 'expertise';
+    } else {
+      if (step === 1) return 'style';
+      if (step === 2) return 'needed';
+      if (step === 3) return 'availability';
+      if (step === 4) return 'expertise';
+    }
+  };
+
+  const content = getContentStep();
+
   return (
     <div className="onboarding-page">
       <div className="onboarding-card fade-in">
         <div className="progress-bar">
-          <div className="progress-fill" style={{ width: `${(step / 4) * 100}%` }}></div>
+          <div className="progress-fill" style={{ width: `${(step / totalSteps) * 100}%` }}></div>
         </div>
-        <p className="step-label">Step {step} of 4</p>
+        <p className="step-label">Step {step} of {totalSteps}</p>
 
-        {step === 1 && (
+        {/* ── Learning/Teaching Style ──────────────────────────────────── */}
+        {content === 'style' && (
           <div className="step-content">
-            <h2>How do you learn best?</h2>
-            <p className="step-desc">Select your primary learning style</p>
+            <h2>{isMentor ? "What's your teaching style?" : 'How do you learn best?'}</h2>
+            <p className="step-desc">{isMentor ? 'Select how you prefer to teach' : 'Select your primary learning style'}</p>
             <div className="style-grid">
               {VARK_STYLES.map(style => (
                 <button key={style} className={`style-btn ${learningStyle === style ? 'active' : ''}`} onClick={() => setLearningStyle(style)}>
@@ -68,7 +96,8 @@ const Onboarding = () => {
           </div>
         )}
 
-        {step === 2 && (
+        {/* ── Subjects Needed (students only) ─────────────────────────── */}
+        {content === 'needed' && (
           <div className="step-content">
             <h2>Subjects I need help with</h2>
             <p className="step-desc">Select the subjects you're struggling with</p>
@@ -82,10 +111,11 @@ const Onboarding = () => {
           </div>
         )}
 
-        {step === 3 && (
+        {/* ── Availability ────────────────────────────────────────────── */}
+        {content === 'availability' && (
           <div className="step-content">
             <h2>My availability</h2>
-            <p className="step-desc">When are you free to study?</p>
+            <p className="step-desc">{isMentor ? 'When are you available to mentor?' : 'When are you free to study?'}</p>
             <div className="availability-grid">
               <div className="avail-header"><div></div>{DAYS.map(d => <div key={d} className="avail-day">{d}</div>)}</div>
               {SLOTS.map(slot => (
@@ -103,7 +133,8 @@ const Onboarding = () => {
           </div>
         )}
 
-        {step === 4 && (
+        {/* ── Expert/Strong Subjects + GPA ────────────────────────────── */}
+        {content === 'expertise' && (
           <div className="step-content">
             <h2>Almost done!</h2>
             <p className="step-desc">Optional: Tell us more about yourself</p>
@@ -111,8 +142,12 @@ const Onboarding = () => {
               <label>GPA (on 4.0 scale)</label>
               <input type="number" value={gpa} onChange={(e) => setGpa(e.target.value)} placeholder="e.g. 3.2" min="0" max="4" step="0.1" />
             </div>
-            <h3 style={{ marginTop: 24, marginBottom: 12, fontSize: '1rem' }}>Subjects I'm strong at (optional)</h3>
-            <p className="step-desc" style={{ marginBottom: 12 }}>Help us identify you as a future mentor!</p>
+            <h3 style={{ marginTop: 24, marginBottom: 12, fontSize: '1rem' }}>
+              {isMentor ? 'Subjects I can teach' : "Subjects I'm strong at (optional)"}
+            </h3>
+            <p className="step-desc" style={{ marginBottom: 12 }}>
+              {isMentor ? 'Select the subjects you can mentor students in' : 'Help us identify you as a future mentor!'}
+            </p>
             <div className="subject-grid">
               {SUBJECTS.filter(s => !subjectsNeeded.includes(s)).map(subj => (
                 <button key={subj} className={`subject-btn green ${subjectsStrong.includes(subj) ? 'active' : ''}`} onClick={() => toggleSubject(subj, 'strong')}>
@@ -125,7 +160,7 @@ const Onboarding = () => {
 
         <div className="step-actions">
           {step > 1 && <button className="btn-back" onClick={() => setStep(step - 1)}>← Back</button>}
-          {step < 4 ? (
+          {step < totalSteps ? (
             <button className="btn-next" onClick={() => setStep(step + 1)} disabled={step === 1 && !learningStyle}>Next →</button>
           ) : (
             <button className="btn-next" onClick={handleSubmit} disabled={loading}>{loading ? 'Saving...' : 'Complete Setup ✓'}</button>

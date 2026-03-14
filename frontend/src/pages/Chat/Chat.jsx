@@ -41,21 +41,21 @@ const groupReactions = (reactions = []) => {
 // ─────────────────────────────────────────────────────────────────────────────
 const Chat = () => {
   const { sessionId } = useParams();
-  const { user }      = useAuth();
-  const navigate      = useNavigate();
+  const { user } = useAuth();
+  const navigate = useNavigate();
 
-  const [session,        setSession]        = useState(null);
-  const [messages,       setMessages]       = useState([]);
-  const [newMessage,     setNewMessage]     = useState('');
-  const [typing,         setTyping]         = useState(null);
-  const [connected,      setConnected]      = useState(false);
-  const [ending,         setEnding]         = useState(false);
+  const [session, setSession] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [newMessage, setNewMessage] = useState('');
+  const [typing, setTyping] = useState(null);
+  const [connected, setConnected] = useState(false);
+  const [ending, setEnding] = useState(false);
   const [loadingSession, setLoadingSession] = useState(true);
-  const [toast,          setToast]          = useState(null);   // { text, type }
-  const [hoveredMsg,     setHoveredMsg]     = useState(null);   // message _id with emoji bar visible
+  const [toast, setToast] = useState(null);   // { text, type }
+  const [hoveredMsg, setHoveredMsg] = useState(null);   // message _id with emoji bar visible
 
-  const socketRef        = useRef(null);
-  const messagesEndRef   = useRef(null);
+  const socketRef = useRef(null);
+  const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
 
   const elapsed = useLiveTimer(session?.startedAt);
@@ -145,8 +145,8 @@ const Chat = () => {
     socketRef.current?.emit('send_message', {
       sessionId,
       senderId: user?._id,
-      content:  newMessage.trim(),
-      type:     'text',
+      content: newMessage.trim(),
+      type: 'text',
     });
     setNewMessage('');
     socketRef.current?.emit('stop_typing', { sessionId, userId: user?._id });
@@ -188,10 +188,10 @@ const Chat = () => {
   // ── Derived ────────────────────────────────────────────────────────────────
   const isStudent = session?.studentId?._id === user?._id || session?.studentId === user?._id;
   const otherName = isStudent
-    ? (session?.mentorId?.name  || 'Mentor')
+    ? (session?.mentorId?.name || 'Mentor')
     : (session?.studentId?.name || 'Student');
   const subject = session?.subject || 'Study Session';
-  const isLong  = elapsed.split(':').length === 3 || parseInt(elapsed.split(':')[0]) >= 30;
+  const isLong = elapsed.split(':').length === 3 || parseInt(elapsed.split(':')[0]) >= 30;
 
   // ── Loading ────────────────────────────────────────────────────────────────
   if (loadingSession) return (
@@ -252,8 +252,8 @@ const Chat = () => {
           )}
 
           {messages.map((msg, idx) => {
-            const isSelf  = msg.senderId?._id === user?._id || msg.senderId === user?._id;
-            const msgId   = msg._id?.toString() || idx.toString();
+            const isSelf = msg.senderId?._id === user?._id || msg.senderId === user?._id;
+            const msgId = msg._id?.toString() || idx.toString();
             const grouped = groupReactions(msg.reactions);
 
             return (

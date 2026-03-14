@@ -15,17 +15,33 @@ const FindMentor = () => {
   const [mlStatus, setMlStatus] = useState(null);
   const [source, setSource] = useState('');
 
+  const [activeTab, setActiveTab] = useState('ai');
+  const [allMentors, setAllMentors] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
+
   // Connect modal state
-  const [connectModal, setConnectModal] = useState(null);  // { mentor }
+  const [connectModal, setConnectModal] = useState(null);
   const [selectedSubject, setSelectedSubject] = useState('');
   const [connecting, setConnecting] = useState(false);
 
-  // ── ML health check on mount ──────────────────────────────────────────────
+  // ── Fetch all mentors and ML status on mount ─────────────────────────────
   useEffect(() => {
     api.get('/ml-status')
       .then(res => setMlStatus(res.data.ml_online))
       .catch(() => setMlStatus(false));
+
+    api.get('/mentors')
+      .then(res => setAllMentors(res.data))
+      .catch(err => console.error('Failed to load mentors:', err));
   }, []);
+
+  const filteredMentors = allMentors.filter(m => {
+    const q = searchQuery.toLowerCase();
+    const nameMatch = (m.name || '').toLowerCase().includes(q);
+    const subjectMatch = (m.mentorProfile?.subjectExpertise || []).some(s => (s || '').toLowerCase().includes(q));
+    const collegeMatch = (m.college || '').toLowerCase().includes(q);
+    return nameMatch || subjectMatch || collegeMatch;
+  });
 
   // ── Find Mentors ──────────────────────────────────────────────────────────
   const handleSearch = async () => {
@@ -104,18 +120,43 @@ const FindMentor = () => {
 
         {/* ── Header ─────────────────────────────────────────────────────── */}
         <div className="find-header fade-in">
-          <h1>🔍 Find Your Mentor</h1>
-          <p>Our AI analyzes your profile across 6 dimensions and recommends the top 3 most compatible mentors.</p>
+          <h1>{activeTab === 'ai' ? '🔍 Find Your Mentor (AI)' : '🌐 Browse Mentors'}</h1>
+          <p>
+            {activeTab === 'ai' 
+              ? 'Our AI analyzes your profile across 6 dimensions and recommends the top 3 most compatible mentors.'
+              : 'Search our entire network to find the perfect mentor by name, college, or subject.'}
+          </p>
 
-          <div className="ml-status-badge">
-            {mlStatus === null && <span className="ml-badge checking">⏳ Checking AI engine...</span>}
-            {mlStatus === true && <span className="ml-badge online">🟢 AI Engine Online — Live ML Recommendations Active</span>}
-            {mlStatus === false && <span className="ml-badge offline">🟡 AI Engine Offline — Smart fallback will be used</span>}
+          <div className="mentor-tabs">
+            <button className={`tab-btn ${activeTab === 'ai' ? 'active' : ''}`} onClick={() => setActiveTab('ai')}>🤖 AI Match</button>
+            <button className={`tab-btn ${activeTab === 'browse' ? 'active' : ''}`} onClick={() => setActiveTab('browse')}>🔍 Browse All</button>
           </div>
 
-          <button className="btn-find" onClick={handleSearch} disabled={loading}>
-            {loading ? 'Seaching ...' : ' Find My Best Mentors'}
-          </button>
+          {activeTab === 'ai' && (
+            <>
+              <div className="ml-status-badge">
+                {mlStatus === null && <span className="ml-badge checking">⏳ Checking AI engine...</span>}
+                {mlStatus === true && <span className="ml-badge online">🟢 AI Engine Online — Live ML Recommendations Active</span>}
+                {mlStatus === false && <span className="ml-badge offline">🟡 AI Engine Offline — Smart fallback will be used</span>}
+              </div>
+
+              <button className="btn-find" onClick={handleSearch} disabled={loading}>
+                {loading ? 'Searching ...' : ' Find My Best Mentors'}
+              </button>
+            </>
+          )}
+
+          {activeTab === 'browse' && (
+            <div className="browse-search">
+              <input 
+                type="text" 
+                placeholder="Search by name, subject, or college..." 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="search-input"
+              />
+            </div>
+          )}
         </div>
 
         {/* ── Loading ─────────────────────────────────────────────────────── */}
@@ -128,8 +169,8 @@ const FindMentor = () => {
           </div>
         )}
 
-        {/* ── Results ─────────────────────────────────────────────────────── */}
-        {searched && !loading && (
+        {/* ── AI Results ─────────────────────────────────────────────────────── */}
+        {activeTab === 'ai' && searched && !loading && (
           <div className="results-container">
             {source && (
               <div className={`source-badge ${source}`}>
@@ -205,14 +246,74 @@ const FindMentor = () => {
                     ))}
                   </div>
 
-                  <div className="mc-actions">
+                  <div className="mc-actions" style={{ display: 'flex', gap: '10px' }}>
+                    <button 
+                      className="btn-connect" 
+                      style={{ flex: 1, background: 'transparent', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
+                      onClick={() => navigate(`/mentor/${mentor.mentor_id}`)}
+                      disabled={mentor.mentor_id?.startsWith('demo')}
+                    >
+                      👤 View Profile
+                    </button>
                     <button
                       className="btn-connect"
+                      style={{ flex: 1 }}
                       onClick={() => openConnectModal(mentor)}
                       disabled={mentor.mentor_id?.startsWith('demo')}
                       title={mentor.mentor_id?.startsWith('demo') ? 'Demo mode — log in with a real account' : ''}
                     >
                       💬 Connect Now
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* ── Browse Results ─────────────────────────────────────────────────── */}
+        {activeTab === 'browse' && (
+          <div className="browse-grid fade-in">
+            {filteredMentors.length === 0 ? (
+              <div className="no-results">No mentors found matching "{searchQuery}"</div>
+            ) : (
+              filteredMentors.map((mentor, idx) => (
+                <div key={mentor._id} className="mentor-card slide-up" style={{ animationDelay: `${(idx % 15) * 0.05}s` }}>
+                  <div className="mc-body" style={{ borderBottom: '1px solid var(--border)' }}>
+                    <div className="mc-avatar">{mentor.name?.charAt(0) || '?'}</div>
+                    <div className="mc-info">
+                      <h3>{mentor.name}</h3>
+                      <p>{mentor.college} • Semester {mentor.semester}</p>
+                      <div className="mc-tags" style={{ marginTop: '8px' }}>
+                        {(mentor.mentorProfile?.subjectExpertise || []).slice(0, 3).map((s, i) => (
+                          <span key={i} className="tag">{s}</span>
+                        ))}
+                        {(mentor.mentorProfile?.subjectExpertise || []).length > 3 && (
+                          <span className="tag">+{(mentor.mentorProfile?.subjectExpertise || []).length - 3}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="mc-actions" style={{ paddingTop: '20px', display: 'flex', gap: '10px' }}>
+                    <button 
+                      className="btn-connect" 
+                      style={{ flex: 1, background: 'transparent', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
+                      onClick={() => navigate(`/mentor/${mentor._id}`)}
+                    >
+                      👤 View Profile
+                    </button>
+                    <button 
+                      className="btn-connect" 
+                      style={{ flex: 1 }}
+                      onClick={() => openConnectModal({
+                        mentor_id: mentor._id,
+                        name: mentor.name,
+                        match_percentage: 'N/A ',
+                        mentor_details: { subject_expertise: mentor.mentorProfile?.subjectExpertise || [] }
+                      })}
+                    >
+                      💬 Connect
                     </button>
                   </div>
                 </div>

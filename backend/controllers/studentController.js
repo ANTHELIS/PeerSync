@@ -5,20 +5,26 @@ const User = require('../models/User');
 const completeOnboarding = async (req, res) => {
   const { learningStyle, subjectsNeeded, subjectsStrong, availability, gpa } = req.body;
 
-  const user = await User.findByIdAndUpdate(
-    req.user._id,
-    {
-      learningStyle,
-      subjectsNeeded,
-      subjectsStrong: subjectsStrong || [],
-      availability: availability || [],
-      gpa: gpa || 0,
-      onboardingComplete: true,
-    },
-    { new: true }
-  );
+  // If the user is a mentor, also populate mentorProfile fields
+  const user = await User.findById(req.user._id);
+  const updateData = {
+    learningStyle,
+    subjectsNeeded,
+    subjectsStrong: subjectsStrong || [],
+    availability: availability || [],
+    gpa: gpa || 0,
+    onboardingComplete: true,
+  };
 
-  res.json({ message: 'Onboarding complete', profile: user });
+  // If user is a mentor, sync their mentorProfile with onboarding data
+  if (user.role === 'mentor' || user.isMentor) {
+    updateData['mentorProfile.teachingStyle'] = learningStyle || '';
+    updateData['mentorProfile.subjectExpertise'] = subjectsStrong || [];
+    updateData['mentorProfile.mentorAvailability'] = availability || [];
+  }
+
+  const updated = await User.findByIdAndUpdate(req.user._id, updateData, { new: true });
+  res.json({ message: 'Onboarding complete', profile: updated });
 };
 
 // @desc    Get student profile
@@ -32,33 +38,13 @@ const getProfile = async (req, res) => {
 // @route   PUT /api/students/profile
 const updateProfile = async (req, res) => {
   const updates = req.body;
+
+  // Prevent role changes via profile update
+  delete updates.role;
+  delete updates.isMentor;
+
   const user = await User.findByIdAndUpdate(req.user._id, updates, { new: true });
   res.json(user);
 };
 
-// @desc    Become a mentor (opt-in)
-// @route   PUT /api/students/become-mentor
-const becomeMentor = async (req, res) => {
-  const { teachingStyle, subjectExpertise, mentorAvailability } = req.body;
-
-  const user = await User.findByIdAndUpdate(
-    req.user._id,
-    {
-      isMentor: true,
-      mentorProfile: {
-        teachingStyle: teachingStyle || 'Visual',
-        subjectExpertise: subjectExpertise || [],
-        mentorAvailability: mentorAvailability || [],
-        patienceScore: 4.0,
-        totalSessions: 0,
-        avgRating: 0,
-        totalRatings: 0,
-      },
-    },
-    { new: true }
-  );
-
-  res.json({ message: 'You are now a mentor!', mentorProfile: user.mentorProfile });
-};
-
-module.exports = { completeOnboarding, getProfile, updateProfile, becomeMentor };
+module.exports = { completeOnboarding, getProfile, updateProfile };

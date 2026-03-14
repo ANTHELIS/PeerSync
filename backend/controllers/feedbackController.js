@@ -10,6 +10,8 @@ const submitFeedback = async (req, res) => {
   const {
     sessionId,
     mentorId,
+    studentId,
+    isSessionMentor, // Flag to indicate if the mentor is rating the student
     overallRating,
     helpfulnessRating,
     clarityRating,
@@ -21,8 +23,8 @@ const submitFeedback = async (req, res) => {
   // Save feedback
   const feedback = await Feedback.create({
     sessionId,
-    studentId: req.user._id,
-    mentorId,
+    studentId: studentId || req.user._id,
+    mentorId: mentorId,
     overallRating,
     helpfulnessRating: helpfulnessRating || 3,
     clarityRating: clarityRating || 3,
@@ -31,26 +33,30 @@ const submitFeedback = async (req, res) => {
     comment: comment || '',
   });
 
-  // Update mentor's aggregate stats
-  const allFeedbacks = await Feedback.find({ mentorId });
-  const avgRating =
-    allFeedbacks.reduce((sum, f) => sum + f.overallRating, 0) / allFeedbacks.length;
+  // If the mentor is rating the student, do not update the mentor's own ratings or ML engine.
+  // We only want the *student's rating of the mentor* to impact the mentor's visible score.
+  if (!isSessionMentor) {
+    // Update mentor's aggregate stats
+    const allFeedbacks = await Feedback.find({ mentorId, studentId: { $ne: mentorId } }); 
+    const avgRating =
+      allFeedbacks.reduce((sum, f) => sum + f.overallRating, 0) / allFeedbacks.length;
 
-  await User.findByIdAndUpdate(mentorId, {
-    'mentorProfile.avgRating': Math.round(avgRating * 10) / 10,
-    'mentorProfile.totalRatings': allFeedbacks.length,
-    $inc: { 'mentorProfile.totalSessions': 1 },
-  });
-
-  // Send to ML service for retraining (fire and forget)
-  try {
-    await axios.post(`${ML_SERVICE_URL}/api/ml/feedback`, {
-      student_id: req.user._id.toString(),
-      mentor_id: mentorId,
-      rating: overallRating,
+    await User.findByIdAndUpdate(mentorId, {
+      'mentorProfile.avgRating': Math.round(avgRating * 10) / 10,
+      'mentorProfile.totalRatings': allFeedbacks.length,
+      $inc: { 'mentorProfile.totalSessions': 1 },
     });
-  } catch {
-    console.log('⚠️ ML service unavailable for feedback sync');
+
+    // Send to ML service for retraining (fire and forget)
+    try {
+      await axios.post(`${ML_SERVICE_URL}/api/ml/feedback`, {
+        student_id: (studentId || req.user._id).toString(),
+        mentor_id: mentorId,
+        rating: overallRating,
+      });
+    } catch {
+      console.log('⚠️ ML service unavailable for feedback sync');
+    }
   }
 
   res.status(201).json({ message: 'Feedback submitted', feedback });

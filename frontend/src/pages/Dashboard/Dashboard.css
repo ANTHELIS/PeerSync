@@ -92,3 +92,93 @@
   .quick-actions { grid-template-columns: 1fr; }
   .dashboard-stats { grid-template-columns: repeat(2, 1fr); }
 }
+
+.clickable-stat {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.clickable-stat:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+  border-color: var(--primary);
+}
+
+.session-history-section {
+  margin-top: 40px;
+  padding: 28px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.session-history-section h2 {
+  font-size: 1.3rem;
+  margin-bottom: 20px;
+  font-weight: 600;
+}
+
+.history-empty {
+  padding: 30px;
+  text-align: center;
+  color: var(--text-muted);
+  font-style: italic;
+  background: rgba(0,0,0,0.02);
+  border-radius: var(--radius-md);
+}
+
+.history-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.history-card {
+  padding: 20px;
+  background: var(--bg-main);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  transition: var(--transition);
+}
+
+.history-card:hover {
+  border-color: rgba(102, 126, 234, 0.4);
+}
+
+.hc-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.hc-subject {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 1.05rem;
+}
+
+.hc-date {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.hc-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hc-partner {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.hc-duration {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}

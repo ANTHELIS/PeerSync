@@ -23,7 +23,9 @@ const Navbar = () => {
           {user ? (
             <>
               <Link to="/dashboard" className="nav-link">Dashboard</Link>
-              <Link to="/find-mentor" className="nav-link">Find Mentor</Link>
+              {!user.isMentor && (
+                <Link to="/find-mentor" className="nav-link">Find Mentor</Link>
+              )}
               {user.isMentor && (
                 <Link to="/mentor-dashboard" className="nav-link">Mentor Hub</Link>
               )}

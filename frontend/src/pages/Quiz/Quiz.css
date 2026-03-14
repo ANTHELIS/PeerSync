@@ -50,6 +50,135 @@
   letter-spacing: 0.04em;
   margin-bottom: 20px;
 }
+.qi-ai-badge {
+  display: inline-block;
+  padding: 6px 16px;
+  background: linear-gradient(135deg, rgba(167,139,250,0.15), rgba(102,126,234,0.15));
+  border: 1px solid rgba(167,139,250,0.35);
+  border-radius: 999px;
+  color: #c4b5fd;
+  font-size: 0.78rem; font-weight: 600;
+  letter-spacing: 0.03em;
+  margin-bottom: 16px;
+  animation: shimmer 2s ease infinite;
+}
+@keyframes shimmer {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* ── Cooldown Screen ───────────────────────────────────────────────────── */
+.qi-cooldown-icon {
+  font-size: 3.5rem;
+  margin-bottom: 12px;
+  animation: pulse-soft 2s ease-in-out infinite;
+}
+@keyframes pulse-soft {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+.qi-countdown {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin: 24px 0;
+  padding: 20px 32px;
+  background: rgba(251,191,36,0.08);
+  border: 1px solid rgba(251,191,36,0.2);
+  border-radius: var(--radius-lg, 16px);
+}
+.qi-countdown-label {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.qi-countdown-timer {
+  font-size: 2rem;
+  font-weight: 800;
+  color: #fbbf24;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+.qi-existing-scores {
+  margin-top: 24px;
+  text-align: left;
+  width: 100%;
+}
+.qi-existing-scores h3 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: var(--text-secondary);
+}
+.qi-score-pills {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.qi-score-pill {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--bg-input, rgba(255,255,255,0.04));
+  border: 1px solid var(--border, rgba(255,255,255,0.08));
+  border-left-width: 3px;
+  border-radius: 8px;
+}
+.qi-sp-name { flex: 1; font-size: 0.88rem; font-weight: 500; }
+.qi-sp-score { font-size: 0.9rem; font-weight: 700; }
+.qi-sp-level {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+/* ── Subject Picker ────────────────────────────────────────────────────── */
+.qi-subject-picker {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 24px;
+}
+.qi-subject-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--bg-input, rgba(255,255,255,0.05));
+  border: 1px solid var(--border, rgba(255,255,255,0.1));
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.qi-subject-btn:hover {
+  background: rgba(255,255,255,0.1);
+  border-color: rgba(255,255,255,0.2);
+}
+.qi-subject-btn.active {
+  background: var(--primary-color, #2563eb);
+  color: #fff;
+  border-color: var(--primary-color, #2563eb);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+}
+
+/* ── Retake Note ───────────────────────────────────────────────────────── */
+.qr-retake-note {
+  text-align: center;
+  font-size: 0.84rem;
+  color: var(--text-muted);
+  margin-top: 12px;
+  padding: 10px;
+  background: rgba(255,255,255,0.03);
+  border-radius: 8px;
+}
 .quiz-intro h1 {
   font-size: 2rem; font-weight: 800;
   margin-bottom: 14px;
@@ -80,8 +209,27 @@
   padding: 18px 20px;
   text-align: left; margin-bottom: 32px;
 }
-.qi-rule { font-size: 0.88rem; color: var(--text-secondary); }
+.qi-rule { font-size: 0.88rem; color: var(--text-secondary); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .qi-rule strong { color: var(--text-primary); }
+
+.qi-role-tag {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.qi-role-tag.mentor {
+  background: rgba(74,222,128,0.12);
+  color: #4ade80;
+  border: 1px solid rgba(74,222,128,0.3);
+}
+.qi-role-tag.student {
+  background: rgba(96,165,250,0.12);
+  color: #60a5fa;
+  border: 1px solid rgba(96,165,250,0.3);
+}
 
 .btn-start-quiz {
   width: 100%;

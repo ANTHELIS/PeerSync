@@ -1,13 +1,84 @@
 const User = require('../models/User');
-const { generateQuiz, scoreQuiz } = require('../utils/quizBank');
+const { generateAIQuiz } = require('../utils/geminiQuiz');
+const { scoreQuiz } = require('../utils/quizBank');
 
 // ── Skill level thresholds ────────────────────────────────────────────────────
 const STRONG_THRESHOLD      = 65;   // score ≥ 65% → this is actually a strong subject
 const WEAK_THRESHOLD        = 40;   // score < 40% on a "strong" subject → remove from strong
-const DEFINITELY_NEEDS_HELP = 50;   // score < 50% on a "needed" subject → keep in needed
 
-// @desc  Generate a skill quiz for the logged-in user
-// @route GET /api/quiz/generate
+// ── Timer per question (seconds) ──────────────────────────────────────────────
+const MENTOR_TIMER  = 5;    // Mentors get 5 seconds per question
+const STUDENT_TIMER = 10;   // Students get 10 seconds per question
+
+// ── Daily limit (ms) ─────────────────────────────────────────────────────────
+const QUIZ_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+// ── Helper: check if user can take quiz today ─────────────────────────────────
+function getQuizCooldown(user) {
+  if (!user.lastQuizAt) return { canTake: true };
+
+  const now     = Date.now();
+  const lastAt  = new Date(user.lastQuizAt).getTime();
+  const elapsed = now - lastAt;
+
+  if (elapsed >= QUIZ_COOLDOWN_MS) {
+    return { canTake: true };
+  }
+
+  const remaining = QUIZ_COOLDOWN_MS - elapsed;
+  return {
+    canTake: false,
+    nextAvailableAt: new Date(lastAt + QUIZ_COOLDOWN_MS).toISOString(),
+    remainingMs: remaining,
+  };
+}
+
+
+// @desc  Check if user can take quiz, provide available subjects
+// @route GET /api/quiz/status
+const getQuizStatus = async (req, res) => {
+  const user = await User.findById(req.user._id);
+
+  if (!user.onboardingComplete) {
+    return res.status(400).json({ message: 'Complete onboarding first' });
+  }
+
+  const cooldown = getQuizCooldown(user);
+
+  // If returning user and still in cooldown, return cooldown data
+  if (user.quizCompleted && !cooldown.canTake) {
+    return res.json({
+      cooldown: true,
+      nextAvailableAt: cooldown.nextAvailableAt,
+      remainingMs: cooldown.remainingMs,
+      skillScores: user.skillScores,
+    });
+  }
+
+  // Not in cooldown: either first-time or returning.
+  const ALL_SUBJECTS = [
+    'Data Structures', 'Machine Learning', 'Web Development', 'Calculus',
+    'Database Systems', 'Operating Systems', 'Computer Networks', 'Python',
+    'Java', 'Statistics'
+  ];
+
+  const userSubjects = [...new Set([
+    ...(user.subjectsNeeded || []),
+    ...(user.subjectsStrong || []),
+  ])];
+
+  res.json({
+    cooldown: false,
+    availableSubjects: ALL_SUBJECTS,
+    userSubjects,
+    role: user.role || (user.isMentor ? 'mentor' : 'student'),
+    alreadyCompleted: false, // We no longer show the old results phase by default if they can retake.
+  });
+};
+
+// @desc  Generate a skill quiz for the logged-in user (AI-powered)
+// @route POST /api/quiz/generate
+// @body  { subjects?: string[] }  — optional array of subjects to quiz on
 const getQuiz = async (req, res) => {
   const user = await User.findById(req.user._id);
 
@@ -15,50 +86,106 @@ const getQuiz = async (req, res) => {
     return res.status(400).json({ message: 'Complete onboarding first' });
   }
 
-  if (user.quizCompleted) {
-    return res.json({ alreadyCompleted: true, skillScores: user.skillScores });
-  }
+  // ── Daily limit check ──────────────────────────────────────────────────
+  const cooldown = getQuizCooldown(user);
 
-  const questions = generateQuiz(user.subjectsNeeded, user.subjectsStrong);
-
-  if (questions.length === 0) {
-    return res.status(400).json({
-      message: 'No subjects selected to quiz on. Please complete onboarding with subjects.',
+  // First-time users bypass cooldown; returning users must wait 24h
+  if (user.quizCompleted && !cooldown.canTake) {
+    return res.json({
+      cooldown: true,
+      nextAvailableAt: cooldown.nextAvailableAt,
+      remainingMs: cooldown.remainingMs,
+      skillScores: user.skillScores,
     });
   }
 
-  // Strip correct answers before sending to frontend!
+  const ALL_SUBJECTS = [
+    'Data Structures', 'Machine Learning', 'Web Development', 'Calculus',
+    'Database Systems', 'Operating Systems', 'Computer Networks', 'Python',
+    'Java', 'Statistics'
+  ];
+
+  // ── Determine which subjects to quiz on ────────────────────────────────
+  const allUserSubjects = [...new Set([
+    ...(user.subjectsNeeded || []),
+    ...(user.subjectsStrong || []),
+  ])];
+
+  // If frontend sent specific subjects, validate them against master subjects list
+  const requestedSubjects = req.body?.subjects;
+  let quizSubjectsNeeded = [];
+  let quizSubjectsStrong = [];
+
+  if (Array.isArray(requestedSubjects) && requestedSubjects.length > 0) {
+    // Only allow subjects that actually exist in the platform
+    const validSubjects = requestedSubjects.filter(s => ALL_SUBJECTS.includes(s));
+    if (validSubjects.length === 0) {
+      return res.status(400).json({ message: 'Invalid subjects selected.' });
+    }
+    
+    // Sort selected subjects into "needed" or "strong", defaulting to "needed" if new
+    quizSubjectsNeeded = validSubjects.filter(s => !(user.subjectsStrong || []).includes(s));
+    quizSubjectsStrong = validSubjects.filter(s => (user.subjectsStrong || []).includes(s));
+  } else {
+    quizSubjectsNeeded = user.subjectsNeeded || [];
+    quizSubjectsStrong = user.subjectsStrong || [];
+  }
+
+  // ── Generate questions via Gemini AI (with static fallback) ────────────
+  const { questions, source } = await generateAIQuiz(
+    quizSubjectsNeeded,
+    quizSubjectsStrong
+  );
+
+  if (questions.length === 0) {
+    return res.status(400).json({
+      message: 'No questions could be generated for the selected subjects.',
+    });
+  }
+
+  // ── Store full questions (with answers) server-side for secure scoring ──
+  await User.findByIdAndUpdate(req.user._id, { activeQuiz: questions });
+
+  // ── Timer based on role ────────────────────────────────────────────────
+  const timerPerQuestion = (user.role === 'mentor' || user.isMentor) ? MENTOR_TIMER : STUDENT_TIMER;
+
+  // ── Strip correct answers before sending to frontend ───────────────────
   const safeQuestions = questions.map(({ correct, ...rest }) => rest);
-  res.json({ questions: safeQuestions, total: safeQuestions.length });
+
+  res.json({
+    questions: safeQuestions,
+    total: safeQuestions.length,
+    timerPerQuestion,
+    role: user.role || (user.isMentor ? 'mentor' : 'student'),
+    source,
+    isRetake: user.quizCompleted,
+    availableSubjects: allUserSubjects,  // for the subject picker
+  });
 };
 
 
-// @desc  Submit quiz answers, score them, update subjectsNeeded/subjectsStrong/skillScores
+// @desc  Submit quiz answers, score them, update profile
 // @route POST /api/quiz/submit
 const submitQuiz = async (req, res) => {
-  const { answers, questions: clientQuestions } = req.body;
+  const { answers } = req.body;
 
-  if (!Array.isArray(answers) || !Array.isArray(clientQuestions)) {
-    return res.status(400).json({ message: 'answers and questions arrays are required' });
+  if (!Array.isArray(answers)) {
+    return res.status(400).json({ message: 'answers array is required' });
   }
 
-  const user = await User.findById(req.user._id);
+  // ── Retrieve the stored quiz with correct answers from DB ──────────────
+  const user = await User.findById(req.user._id).select('+activeQuiz');
 
-  // ── Server-side scoring ───────────────────────────────────────────────────
-  // Regenerate correct answers from the bank to validate client submissions
-  const { generateQuiz: gen } = require('../utils/quizBank');
-  const fullQuestions = gen(user.subjectsNeeded, user.subjectsStrong);
-  const idToCorrect = {};
-  fullQuestions.forEach(q => { idToCorrect[q.id] = q.correct; });
+  if (!user.activeQuiz || user.activeQuiz.length === 0) {
+    return res.status(400).json({ message: 'No active quiz found. Please generate a quiz first.' });
+  }
 
-  const scoredQuestions = clientQuestions.map(q => ({
-    ...q,
-    correct: idToCorrect[q.id] ?? -99, // -99 → unknown question, will mark wrong
-  }));
+  const storedQuestions = user.activeQuiz;
 
-  const results = scoreQuiz(scoredQuestions, answers);
+  // ── Score using the server-stored questions ────────────────────────────
+  const results = scoreQuiz(storedQuestions, answers);
 
-  // ── Build skill scores map ────────────────────────────────────────────────
+  // ── Build skill scores map ────────────────────────────────────────────
   const skillScores = {};
   for (const [subject, data] of Object.entries(results)) {
     skillScores[subject] = {
@@ -70,59 +197,60 @@ const submitQuiz = async (req, res) => {
     };
   }
 
-  // ── AI-driven profile update logic ────────────────────────────────────────
-  //
-  //  For each tested subject:
-  //    score ≥ 65%  → promote to "strong" (remove from needed if it was there)
-  //    score 40-64% → neutral: keep in whatever list user originally put it
-  //    score < 40%  → definitely NOT strong (remove from strong); if it was "needed" keep it there
-  //
-  // Starting pools from self-reported onboarding:
+  // ── AI-driven profile update logic ────────────────────────────────────
   let updatedStrong = [...(user.subjectsStrong || [])];
   let updatedNeeded = [...(user.subjectsNeeded || [])];
 
-  const promoted   = [];  // subjects moved needed → strong
-  const demoted    = [];  // subjects removed from strong
-  const confirmed  = [];  // subjects kept/added in strong because quiz confirmed it
+  const promoted   = [];
+  const demoted    = [];
+  const confirmed  = [];
 
   for (const [subject, data] of Object.entries(results)) {
     const wasStrong = updatedStrong.includes(subject);
     const wasNeeded = updatedNeeded.includes(subject);
 
     if (data.score >= STRONG_THRESHOLD) {
-      // ✅ Quiz confirmed this subject as strong
       if (!updatedStrong.includes(subject)) {
         updatedStrong.push(subject);
         if (wasNeeded) promoted.push(subject);
         else confirmed.push(subject);
       }
-      // Remove from "needed" — they don't actually need help here
       updatedNeeded = updatedNeeded.filter(s => s !== subject);
 
     } else if (data.score < WEAK_THRESHOLD) {
-      // ❌ Quiz says NOT actually strong
       if (wasStrong) {
         updatedStrong = updatedStrong.filter(s => s !== subject);
         demoted.push(subject);
-        // If they scored very low, add to "needed" (they need help) unless already there
         if (!updatedNeeded.includes(subject)) {
           updatedNeeded.push(subject);
         }
       }
-      // If it was already "needed", keep it there — they definitely need help
     }
-    // score 40-64%: leave the subject in whatever bucket the user originally put it
   }
 
-  // Save everything back to DB
-  await User.findByIdAndUpdate(req.user._id, {
+  // ── Save everything back to DB ────────────────────────────────────────
+  const updateData = {
     skillScores,
     quizCompleted: true,
+    lastQuizAt: new Date(),       // ← record when the quiz was completed
     subjectsStrong: updatedStrong,
     subjectsNeeded: updatedNeeded,
-  });
+    activeQuiz: [],               // clear the stored quiz
+  };
 
-  // ── Build a human-readable summary ───────────────────────────────────────
+  // If mentor, only show subjects with > 70% score as expertise
+  if (user.role === 'mentor' || user.isMentor) {
+    const EXPERTISE_THRESHOLD = 70;
+    const verifiedExpertise = updatedStrong.filter(subject => {
+      const subjectScore = skillScores[subject];
+      return !subjectScore || subjectScore.score > EXPERTISE_THRESHOLD;
+    });
+    updateData['mentorProfile.subjectExpertise'] = verifiedExpertise;
+  }
+
+  await User.findByIdAndUpdate(req.user._id, updateData);
+
+  // ── Response ──────────────────────────────────────────────────────────
   const overallAccuracy = Math.round(
     Object.values(results).reduce((sum, r) => sum + r.score, 0) / Object.values(results).length
   );
@@ -130,28 +258,41 @@ const submitQuiz = async (req, res) => {
   res.json({
     success: true,
     results,
-    // Profile change summary for the frontend
     profileUpdate: {
-      promoted,    // weak → strong
-      demoted,     // strong → weak (removed from strong)
-      confirmed,   // newly confirmed strong (was neither before)
+      promoted,
+      demoted,
+      confirmed,
       updatedStrong,
       updatedNeeded,
     },
     overallAccuracy,
-    message: 'Skill profile updated! Your subjects and ML matches are now based on verified data.',
+    message: 'Skill profile updated! You can retake the assessment again in 24 hours.',
   });
 };
 
 
-// @desc  Reset quiz (allow retake)
+// @desc  Reset quiz (allow retake) — now respects daily limit
 // @route DELETE /api/quiz/reset
 const resetQuiz = async (req, res) => {
+  const user = await User.findById(req.user._id);
+
+  // Check cooldown before allowing reset
+  const cooldown = getQuizCooldown(user);
+  if (user.quizCompleted && !cooldown.canTake) {
+    return res.status(429).json({
+      message: 'You can only retake the quiz once every 24 hours.',
+      nextAvailableAt: cooldown.nextAvailableAt,
+      remainingMs: cooldown.remainingMs,
+    });
+  }
+
   await User.findByIdAndUpdate(req.user._id, {
     quizCompleted: false,
     skillScores: {},
+    activeQuiz: [],
+    // NOTE: we do NOT reset lastQuizAt — the cooldown persists
   });
   res.json({ message: 'Quiz reset. You can retake the assessment.' });
 };
 
-module.exports = { getQuiz, submitQuiz, resetQuiz };
+module.exports = { getQuizStatus, getQuiz, submitQuiz, resetQuiz };

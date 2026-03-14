@@ -4,10 +4,27 @@ import { useAuth } from '../../context/AuthContext';
 import './Auth.css';
 
 // ── Role config ───────────────────────────────────────────────────────────────
+const ROLES = [
+  {
+    id:    'student',
+    icon:  '📖',
+    label: 'Register as Student',
+    desc:  'Find mentors, get help with your subjects, and learn!',
+    color: '#60a5fa',
+  },
+  {
+    id:    'mentor',
+    icon:  '🎓',
+    label: 'Register as Mentor',
+    desc:  'Share your expertise, help students, and build your profile!',
+    color: '#4ade80',
+  },
+];
+
 const USER_TYPES = [
   {
     id:    'college_student',
-    icon:  '🎓',
+    icon:  '🏛️',
     label: 'College Student',
     desc:  'Undergraduate or postgraduate student',
   },
@@ -32,15 +49,16 @@ const SCHOOL_GRADES = [
 ];
 
 const Signup = () => {
-  const [step,    setStep]    = useState(1);          // 1 = role picker, 2 = details form
+  const [step,     setStep]     = useState(1);       // 1 = role (mentor/student), 2 = user type, 3 = details form
+  const [role,     setRole]     = useState('');       // 'mentor' or 'student'
   const [userType, setUserType] = useState('');
   const [form, setForm] = useState({
     name: '', email: '', password: '', confirmPassword: '',
     institution: '',
     semester: '1',
     grade: '',
-    marksType: '',    // 'sgpa' | 'percentage' | ''
-    marksValue: '',   // optional numeric value
+    marksType: '',
+    marksValue: '',
   });
   const [error,   setError]   = useState('');
   const [loading, setLoading] = useState(false);
@@ -80,6 +98,7 @@ const Signup = () => {
         name:        form.name.trim(),
         email:       form.email.trim(),
         password:    form.password,
+        role,                                          // permanent role
         userType,
         institution: form.institution.trim(),
         // College student extras
@@ -100,7 +119,7 @@ const Signup = () => {
       await signup(
         payload.name, payload.email, payload.password,
         payload.college || '', payload.semester || 1,
-        payload   // full payload passed through
+        payload
       );
       navigate('/onboarding');
     } catch (err) {
@@ -121,12 +140,64 @@ const Signup = () => {
     <div className="auth-page">
       <div className="auth-card signup-card fade-in">
 
-        {/* ── Step 1: Role Picker ────────────────────────────────────────── */}
+        {/* ── Step 1: Mentor or Student ─────────────────────────────────── */}
         {step === 1 && (
           <>
             <div className="auth-header">
+              <h1>Join PeerSync</h1>
+              <p>Choose how you want to participate</p>
+            </div>
+
+            <div className="role-grid">
+              {ROLES.map(r => (
+                <button
+                  key={r.id}
+                  type="button"
+                  className={`role-card role-card--${r.id} ${role === r.id ? 'selected' : ''}`}
+                  onClick={() => setRole(r.id)}
+                >
+                  <span className="role-icon">{r.icon}</span>
+                  <div className="role-text-wrap">
+                    <span className="role-label">{r.label}</span>
+                    <span className="role-desc">{r.desc}</span>
+                  </div>
+                  {role === r.id && <span className="role-check">✓</span>}
+                </button>
+              ))}
+            </div>
+
+            <div className="role-lock-notice">
+              🔒 This choice is <strong>permanent</strong> — you cannot switch roles later.
+            </div>
+
+            <button
+              className="auth-submit"
+              onClick={() => setStep(2)}
+              disabled={!role}
+              style={{ marginTop: 16 }}
+            >
+              Continue →
+            </button>
+
+            <p className="auth-footer">
+              Already have an account? <Link to="/login">Sign in</Link>
+            </p>
+          </>
+        )}
+
+        {/* ── Step 2: User Type Picker ──────────────────────────────────── */}
+        {step === 2 && (
+          <>
+            <div className="auth-header">
+              <button className="back-btn" onClick={() => { setStep(1); setError(''); }}>
+                ← Back
+              </button>
+              <div className={`role-selected-badge role-badge--${role}`}>
+                {role === 'mentor' ? '🎓' : '📖'}{' '}
+                {role === 'mentor' ? 'Registering as Mentor' : 'Registering as Student'}
+              </div>
               <h1>Who are you?</h1>
-              <p>Select your role to personalise your experience</p>
+              <p>Select your category to personalise your experience</p>
             </div>
 
             <div className="role-grid">
@@ -138,8 +209,10 @@ const Signup = () => {
                   onClick={() => setUserType(type.id)}
                 >
                   <span className="role-icon">{type.icon}</span>
-                  <span className="role-label">{type.label}</span>
-                  <span className="role-desc">{type.desc}</span>
+                  <div className="role-text-wrap">
+                    <span className="role-label">{type.label}</span>
+                    <span className="role-desc">{type.desc}</span>
+                  </div>
                   {userType === type.id && <span className="role-check">✓</span>}
                 </button>
               ))}
@@ -147,7 +220,7 @@ const Signup = () => {
 
             <button
               className="auth-submit"
-              onClick={() => setStep(2)}
+              onClick={() => setStep(3)}
               disabled={!userType}
               style={{ marginTop: 24 }}
             >
@@ -160,19 +233,20 @@ const Signup = () => {
           </>
         )}
 
-        {/* ── Step 2: Details Form ───────────────────────────────────────── */}
-        {step === 2 && (
+        {/* ── Step 3: Details Form ──────────────────────────────────────── */}
+        {step === 3 && (
           <>
             <div className="auth-header">
-              <button className="back-btn" onClick={() => { setStep(1); setError(''); }}>
+              <button className="back-btn" onClick={() => { setStep(2); setError(''); }}>
                 ← Back
               </button>
-              <div className="role-selected-badge">
+              <div className={`role-selected-badge role-badge--${role}`}>
+                {role === 'mentor' ? '🎓 Mentor' : '📖 Student'}{' · '}
                 {USER_TYPES.find(t => t.id === userType)?.icon}{' '}
                 {USER_TYPES.find(t => t.id === userType)?.label}
               </div>
               <h1>Create Account</h1>
-              <p>Start your personalized learning journey</p>
+              <p>Start your {role === 'mentor' ? 'mentoring' : 'learning'} journey</p>
             </div>
 
             {error && <div className="auth-error">{error}</div>}
@@ -329,7 +403,7 @@ const Signup = () => {
               </div>
 
               <button type="submit" className="auth-submit" disabled={loading}>
-                {loading ? 'Creating account...' : 'Get Started 🚀'}
+                {loading ? 'Creating account...' : `Get Started as ${role === 'mentor' ? 'Mentor' : 'Student'} 🚀`}
               </button>
             </form>
 

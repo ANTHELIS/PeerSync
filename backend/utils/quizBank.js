@@ -8,6 +8,8 @@
  *   - level:   'basic' | 'intermediate' | 'advanced'
  */
 
+const crypto = require('crypto');
+
 const QUESTION_BANK = {
 
   'Data Structures': [
@@ -121,34 +123,55 @@ const QUESTION_BANK = {
   ],
 };
 
+// ── Cryptographically secure Fisher-Yates shuffle ────────────────────────
+function secureRandom() {
+  return crypto.randomBytes(4).readUInt32BE(0) / 0xFFFFFFFF;
+}
+
+function secureShuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(secureRandom() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
 /**
  * Generate quiz questions for a user.
- * For each subject, pick 5 questions randomly (mix of levels).
+ * For each subject, pick 5 questions randomly using crypto-secure shuffle.
+ * Options within each question are also shuffled to prevent memorization.
  */
 const generateQuiz = (subjectsNeeded = [], subjectsStrong = []) => {
-  const allSubjects = [...new Set([...subjectsNeeded, ...subjectsStrong])];
+  const allSubjects = secureShuffle([...new Set([...subjectsNeeded, ...subjectsStrong])]);
   const quiz = [];
 
   for (const subject of allSubjects) {
     const pool = QUESTION_BANK[subject];
     if (!pool) continue;
 
-    // Shuffle and take 5
-    const shuffled = [...pool].sort(() => Math.random() - 0.5).slice(0, 5);
-    shuffled.forEach((q, i) => {
+    // Crypto-secure shuffle and pick 5
+    const picked = secureShuffle(pool).slice(0, 5);
+    picked.forEach((q, i) => {
+      // Shuffle the options too, and track where the correct answer moved
+      const optionIndices = secureShuffle([0, 1, 2, 3]);
+      const shuffledOpts = optionIndices.map(idx => q.opts[idx]);
+      const newCorrectIdx = optionIndices.indexOf(q.ans);
+
       quiz.push({
-        id:      `${subject.replace(/\s+/g, '_')}_${i}`,
+        id:      `${subject.replace(/\s+/g, '_')}_${i}_${crypto.randomBytes(3).toString('hex')}`,
         subject,
         question: q.q,
-        options:  q.opts,
-        correct:  q.ans,
+        options:  shuffledOpts,
+        correct:  newCorrectIdx,
         level:    q.level,
         type:     subjectsNeeded.includes(subject) ? 'weak' : 'strong',
       });
     });
   }
 
-  return quiz;
+  // Final shuffle of all questions across subjects
+  return secureShuffle(quiz);
 };
 
 /**
