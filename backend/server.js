@@ -19,6 +19,7 @@ const matchRoutes   = require('./routes/matchRoutes');
 const sessionRoutes = require('./routes/sessionRoutes');
 const feedbackRoutes= require('./routes/feedbackRoutes');
 const quizRoutes    = require('./routes/quizRoutes');
+const chatbotRoutes = require('./routes/chatbotRoutes');
 
 // Initialize Express
 const app = express();
@@ -44,6 +45,7 @@ app.use('/api/matches',  matchRoutes);
 app.use('/api/sessions', sessionRoutes);
 app.use('/api/feedback', feedbackRoutes);
 app.use('/api/quiz',     quizRoutes);
+app.use('/api/chatbot',  chatbotRoutes);
 
 // ML Service status proxy
 const axios = require('axios');

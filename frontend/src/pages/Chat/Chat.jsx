@@ -38,6 +38,24 @@ const groupReactions = (reactions = []) => {
   return Object.entries(map);
 };
 
+// ── Simple markdown renderer ───────────────────────────────────────────────────
+const renderAIContent = (text) => {
+  // Process text into paragraphs and handle inline formatting
+  return text.split('\n').map((line, i) => {
+    // Bold
+    let processed = line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    // Italic
+    processed = processed.replace(/\*(.*?)\*/g, '<em>$1</em>');
+    // Inline code
+    processed = processed.replace(/`(.*?)`/g, '<code>$1</code>');
+    // Bullet points
+    if (processed.startsWith('• ') || processed.startsWith('- ')) {
+      processed = `<span class="ai-bullet">›</span> ${processed.slice(2)}`;
+    }
+    return processed;
+  }).join('<br/>');
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 const Chat = () => {
   const { sessionId } = useParams();
@@ -53,6 +71,8 @@ const Chat = () => {
   const [loadingSession, setLoadingSession] = useState(true);
   const [toast, setToast] = useState(null);   // { text, type }
   const [hoveredMsg, setHoveredMsg] = useState(null);   // message _id with emoji bar visible
+  const [aiMode, setAiMode] = useState(false);         // AI ask mode toggle
+  const [aiLoading, setAiLoading] = useState(false);    // AI thinking indicator
 
   const socketRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -138,17 +158,54 @@ const Chat = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // ── Send message ───────────────────────────────────────────────────────────
-  const handleSend = (e) => {
+  // ── Send message (normal or AI) ────────────────────────────────────────────
+  const handleSend = async (e) => {
     e.preventDefault();
     if (!newMessage.trim()) return;
-    socketRef.current?.emit('send_message', {
-      sessionId,
-      senderId: user?._id,
-      content: newMessage.trim(),
-      type: 'text',
-    });
-    setNewMessage('');
+
+    const msgContent = newMessage.trim();
+
+    if (aiMode) {
+      // Send user question as a normal message first
+      socketRef.current?.emit('send_message', {
+        sessionId,
+        senderId: user?._id,
+        content: `🤖 @AI: ${msgContent}`,
+        type: 'text',
+      });
+      setNewMessage('');
+      setAiLoading(true);
+
+      try {
+        // Build conversation history for context
+        const conversationHistory = messages.slice(-10).map(m => ({
+          content: m.content,
+          type: m.type,
+        }));
+
+        await api.post('/chatbot/ask', {
+          sessionId,
+          question: msgContent,
+          conversationHistory,
+        });
+        // Response will arrive via socket 'receive_message'
+      } catch (err) {
+        console.error('AI error:', err);
+        showToast('AI could not respond. Try again.', 'warning');
+      } finally {
+        setAiLoading(false);
+      }
+    } else {
+      // Normal message
+      socketRef.current?.emit('send_message', {
+        sessionId,
+        senderId: user?._id,
+        content: msgContent,
+        type: 'text',
+      });
+      setNewMessage('');
+    }
+
     socketRef.current?.emit('stop_typing', { sessionId, userId: user?._id });
   };
 
@@ -248,30 +305,45 @@ const Chat = () => {
               <span className="empty-icon">💬</span>
               <p>Session started! Say hello to {otherName}.</p>
               <span className="text-muted">Working on: {subject}</span>
+              <span className="text-muted ai-hint">💡 Tip: Click the 🤖 button to ask AI for help!</span>
             </div>
           )}
 
           {messages.map((msg, idx) => {
-            const isSelf = msg.senderId?._id === user?._id || msg.senderId === user?._id;
+            const isAI = msg.type === 'ai';
+            const isSelf = !isAI && (msg.senderId?._id === user?._id || msg.senderId === user?._id);
             const msgId = msg._id?.toString() || idx.toString();
             const grouped = groupReactions(msg.reactions);
 
             return (
               <div
                 key={msgId}
-                className={`message ${isSelf ? 'sent' : 'received'}`}
+                className={`message ${isAI ? 'ai-message' : isSelf ? 'sent' : 'received'}`}
                 onMouseEnter={() => setHoveredMsg(msgId)}
                 onMouseLeave={() => setHoveredMsg(null)}
               >
-                {!isSelf && (
+                {/* Sender label */}
+                {isAI && (
+                  <div className="msg-sender-name ai-sender">
+                    <span className="ai-badge">🤖 AI Tutor</span>
+                  </div>
+                )}
+                {!isSelf && !isAI && (
                   <div className="msg-sender-name">
                     {msg.senderId?.name || otherName}
                   </div>
                 )}
 
                 <div className="msg-bubble-wrap">
-                  <div className="msg-bubble">
-                    <p>{msg.content}</p>
+                  <div className={`msg-bubble ${isAI ? 'ai-bubble' : ''}`}>
+                    {isAI ? (
+                      <div
+                        className="ai-content"
+                        dangerouslySetInnerHTML={{ __html: renderAIContent(msg.content) }}
+                      />
+                    ) : (
+                      <p>{msg.content}</p>
+                    )}
                     <span className="msg-time">
                       {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
@@ -312,6 +384,23 @@ const Chat = () => {
             );
           })}
 
+          {/* AI thinking indicator */}
+          {aiLoading && (
+            <div className="message ai-message">
+              <div className="msg-sender-name ai-sender">
+                <span className="ai-badge">🤖 AI Tutor</span>
+              </div>
+              <div className="msg-bubble-wrap">
+                <div className="msg-bubble ai-bubble ai-thinking">
+                  <div className="ai-thinking-dots">
+                    <span></span><span></span><span></span>
+                  </div>
+                  <span className="ai-thinking-text">Thinking...</span>
+                </div>
+              </div>
+            </div>
+          )}
+
           {typing && (
             <div className="typing-indicator">
               <div className="typing-dots"><span /><span /><span /></div>
@@ -323,14 +412,34 @@ const Chat = () => {
 
         {/* ── Input ───────────────────────────────────────────────────────── */}
         <form className="chat-input" onSubmit={handleSend}>
+          <button
+            type="button"
+            className={`ai-toggle-btn ${aiMode ? 'ai-toggle-active' : ''}`}
+            onClick={() => setAiMode(!aiMode)}
+            title={aiMode ? 'Switch to normal chat' : 'Ask AI Tutor'}
+          >
+            🤖
+          </button>
           <input
             type="text"
             value={newMessage}
             onChange={handleTyping}
-            placeholder={`Message ${otherName}...`}
+            placeholder={aiMode ? 'Ask AI Tutor a question...' : `Message ${otherName}...`}
             autoFocus
           />
-          <button type="submit" disabled={!newMessage.trim()}>Send →</button>
+          <button
+            type="submit"
+            disabled={!newMessage.trim() || aiLoading}
+            className={aiMode ? 'ai-send-btn' : ''}
+          >
+            {aiLoading ? (
+              <span className="send-spinner" />
+            ) : aiMode ? (
+              '✨ Ask AI'
+            ) : (
+              'Send →'
+            )}
+          </button>
         </form>
       </div>
     </div>
