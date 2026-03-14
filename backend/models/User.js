@@ -44,7 +44,7 @@ const userSchema = new mongoose.Schema(
     // --- User Classification ---
     userType: {
       type: String,
-      enum: ['college_student', 'school_student', 'professor'],
+      enum: ['college_student', 'school_student', 'professor', 'it_employee'],
       default: 'college_student',
     },
     institution: {
@@ -55,6 +55,18 @@ const userSchema = new mongoose.Schema(
     },
     grade: {
       // Only for school_students: e.g. 'Class 10', 'Class 12'
+      type: String,
+      trim: true,
+      default: '',
+    },
+    designation: {
+      // Only for it_employee: e.g. 'Software Engineer'
+      type: String,
+      trim: true,
+      default: '',
+    },
+    yearsOfExp: {
+      // Only for it_employee: e.g. '1-3', '5-10'
       type: String,
       trim: true,
       default: '',

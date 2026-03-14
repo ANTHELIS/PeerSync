@@ -21,25 +21,47 @@ const ROLES = [
   },
 ];
 
-const USER_TYPES = [
-  {
-    id:    'college_student',
-    icon:  '🏛️',
-    label: 'College Student',
-    desc:  'Undergraduate or postgraduate student',
-  },
-  {
-    id:    'school_student',
-    icon:  '📚',
-    label: 'School Student',
-    desc:  'Class 6 to Class 12',
-  },
-  {
-    id:    'professor',
-    icon:  '🏫',
-    label: 'Professor / Teacher',
-    desc:  'Educator looking to guide learners',
-  },
+const USER_TYPES_BY_ROLE = {
+  student: [
+    {
+      id:    'college_student',
+      icon:  '🏛️',
+      label: 'College Student',
+      desc:  'Undergraduate or postgraduate student',
+    },
+    {
+      id:    'school_student',
+      icon:  '📚',
+      label: 'School Student',
+      desc:  'Class 6 to Class 12',
+    },
+  ],
+  mentor: [
+    {
+      id:    'college_student',
+      icon:  '🏛️',
+      label: 'College Student',
+      desc:  'Undergraduate or postgraduate student',
+    },
+    {
+      id:    'professor',
+      icon:  '🏫',
+      label: 'Professor / Teacher',
+      desc:  'Educator looking to guide learners',
+    },
+    {
+      id:    'it_employee',
+      icon:  '💼',
+      label: 'IT Employee',
+      desc:  'Working professional in the tech industry',
+    },
+  ],
+};
+
+// Flat lookup for labels/icons (used in step 3 badge)
+const ALL_USER_TYPES = [
+  ...USER_TYPES_BY_ROLE.student,
+  ...USER_TYPES_BY_ROLE.mentor.filter(t => t.id !== 'college_student'),
 ];
 
 const SCHOOL_GRADES = [
@@ -59,6 +81,8 @@ const Signup = () => {
     grade: '',
     marksType: '',
     marksValue: '',
+    designation: '',
+    yearsOfExp: '',
   });
   const [error,   setError]   = useState('');
   const [loading, setLoading] = useState(false);
@@ -113,6 +137,12 @@ const Signup = () => {
           grade:      form.grade,
           marksType:  form.marksType  || '',
           marksValue: form.marksValue !== '' ? Number(form.marksValue) : null,
+        }),
+        // IT Employee extras
+        ...(userType === 'it_employee' && {
+          institution: form.institution.trim(),
+          designation: form.designation.trim(),
+          yearsOfExp:  form.yearsOfExp,
         }),
       };
 
@@ -172,7 +202,7 @@ const Signup = () => {
 
             <button
               className="auth-submit"
-              onClick={() => setStep(2)}
+              onClick={() => { setUserType(''); setStep(2); }}
               disabled={!role}
               style={{ marginTop: 16 }}
             >
@@ -201,7 +231,7 @@ const Signup = () => {
             </div>
 
             <div className="role-grid">
-              {USER_TYPES.map(type => (
+              {(USER_TYPES_BY_ROLE[role] || []).map(type => (
                 <button
                   key={type.id}
                   type="button"
@@ -242,8 +272,8 @@ const Signup = () => {
               </button>
               <div className={`role-selected-badge role-badge--${role}`}>
                 {role === 'mentor' ? '🎓 Mentor' : '📖 Student'}{' · '}
-                {USER_TYPES.find(t => t.id === userType)?.icon}{' '}
-                {USER_TYPES.find(t => t.id === userType)?.label}
+                {ALL_USER_TYPES.find(t => t.id === userType)?.icon || (USER_TYPES_BY_ROLE[role]?.find(t => t.id === userType)?.icon)}{' '}
+                {ALL_USER_TYPES.find(t => t.id === userType)?.label || (USER_TYPES_BY_ROLE[role]?.find(t => t.id === userType)?.label)}
               </div>
               <h1>Create Account</h1>
               <p>Start your {role === 'mentor' ? 'mentoring' : 'learning'} journey</p>
@@ -384,6 +414,39 @@ const Signup = () => {
                     onChange={handleChange} placeholder="e.g. IIT Bombay — Dept. of CS"
                   />
                 </div>
+              )}
+
+              {/* ── IT Employee ───────────────────────────────────────────── */}
+              {userType === 'it_employee' && (
+                <>
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>Company / Organisation</label>
+                      <input
+                        type="text" name="institution" value={form.institution}
+                        onChange={handleChange} placeholder="e.g. Google, TCS, Infosys"
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Designation / Role</label>
+                      <input
+                        type="text" name="designation" value={form.designation}
+                        onChange={handleChange} placeholder="e.g. Software Engineer"
+                      />
+                    </div>
+                  </div>
+                  <div className="form-group">
+                    <label>Years of Experience</label>
+                    <select name="yearsOfExp" value={form.yearsOfExp} onChange={handleChange}>
+                      <option value="">Select experience</option>
+                      <option value="0-1">0 – 1 year</option>
+                      <option value="1-3">1 – 3 years</option>
+                      <option value="3-5">3 – 5 years</option>
+                      <option value="5-10">5 – 10 years</option>
+                      <option value="10+">10+ years</option>
+                    </select>
+                  </div>
+                </>
               )}
 
               {/* Passwords */}

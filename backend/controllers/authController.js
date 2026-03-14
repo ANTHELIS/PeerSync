@@ -8,6 +8,7 @@ const signup = async (req, res) => {
       college, semester,
       userType, institution, grade,
       marksType, marksValue,
+      designation, yearsOfExp,
       role,   // 'mentor' or 'student' — chosen at registration, permanent
     } = req.body;
 
@@ -34,6 +35,8 @@ const signup = async (req, res) => {
       userType:     userType     || 'college_student',
       institution:  institution  || '',
       grade:        grade        || '',
+      designation:  designation  || '',
+      yearsOfExp:   yearsOfExp   || '',
       marksType:    marksType    || '',
       marksValue:   marksValue   != null ? Number(marksValue) : null,
       // If registering as mentor, pre-populate mentorProfile shell
